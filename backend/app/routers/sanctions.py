@@ -84,22 +84,33 @@ def fuzzy_score(query: str, target: str) -> float:
     return score
 
 
+TIER_CONFIRMED = 0.92   # ≥ 92%  → подтверждённое совпадение (блокировка)
+TIER_PROBABLE  = 0.78   # ≥ 78%  → вероятное (требует проверки)
+TIER_POSSIBLE  = 0.60   # ≥ 60%  → возможное (обратить внимание)
+
+
+def _match_tier(score: float) -> str:
+    if score >= TIER_CONFIRMED:
+        return "confirmed"
+    if score >= TIER_PROBABLE:
+        return "probable"
+    return "possible"
+
+
 def search_sanctions(
     db: Session,
     query_name: str,
     query_dob: Optional[str] = None,
     list_codes: Optional[List[str]] = None,
-    threshold: float = 0.75,
+    threshold: float = TIER_POSSIBLE,
     limit: int = 20
 ) -> list[dict]:
     """
     Ищет совпадения в санкционных списках.
-    threshold — порог схожести (0.75 = 75%)
+    Три уровня: confirmed (≥92%), probable (≥78%), possible (≥60%).
     """
-    query_normalized = normalize_name(query_name)
     query_variants = get_name_variants(query_name)
 
-    # Берём всех из нужных списков
     q = db.query(SanctionEntry)
     if list_codes:
         q = q.filter(SanctionEntry.list_code.in_(list_codes))
@@ -110,7 +121,6 @@ def search_sanctions(
     for entry in all_entries:
         best_score = 0.0
 
-        # Проверяем основное имя и все псевдонимы
         names_to_check = [entry.primary_name_normalized or ""]
         if entry.aliases:
             for alias in entry.aliases:
@@ -125,11 +135,11 @@ def search_sanctions(
                     best_score = score
 
         if best_score >= threshold:
-            # Дополнительная проверка по дате рождения
             dob_match = None
             if query_dob and entry.date_of_birth:
                 dob_match = query_dob in entry.date_of_birth or entry.date_of_birth in query_dob
 
+            tier = _match_tier(best_score)
             matches.append({
                 "entry_id": entry.id,
                 "list_code": entry.list_code,
@@ -141,10 +151,10 @@ def search_sanctions(
                 "country": entry.country,
                 "score": round(best_score * 100),
                 "dob_match": dob_match,
-                "match_level": "match" if best_score >= 0.92 else "possible_match",
+                "match_tier": tier,
+                "match_level": "match" if tier == "confirmed" else "possible_match",
             })
 
-    # Сортируем по убыванию схожести
     matches.sort(key=lambda x: x["score"], reverse=True)
     return matches[:limit]
 
@@ -316,8 +326,8 @@ def screen(
         threshold=0.75,
     )
 
-    # Определяем итоговый результат
-    if any(m["match_level"] == "match" for m in matches):
+    # Определяем итоговый результат по наивысшему tier
+    if any(m["match_tier"] == "confirmed" for m in matches):
         result = "match"
     elif matches:
         result = "possible_match"
@@ -412,3 +422,100 @@ def get_stats(
         "matches_found": matches,
         "total_entries": total_entries,
     }
+
+
+@router.post("/rescreening")
+def run_rescreening(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Массовый пересмотр всех активных клиентов компании по текущим санкционным спискам.
+    Возвращает статистику: total, clear, possible, confirmed, errors.
+    Новые совпадения (результат изменился) помечаются в notes.
+    """
+    active_lists = db.query(SanctionsList).filter(SanctionsList.is_active == True).all()
+    active_codes = [sl.code for sl in active_lists]
+
+    if not active_codes:
+        raise HTTPException(
+            status_code=422,
+            detail="Нет загруженных санкционных списков."
+        )
+
+    # Собираем всех активных клиентов с именами
+    clients = db.query(models.Client).filter(
+        models.Client.company_id == current_user.company_id,
+        models.Client.is_active == True,
+    ).all()
+
+    stats = {"total": 0, "clear": 0, "possible": 0, "probable": 0, "confirmed": 0, "errors": 0, "new_hits": 0}
+    new_hits = []
+
+    for client in clients:
+        try:
+            # Определяем имя клиента
+            name = None
+            if client.individual:
+                parts = [client.individual.last_name, client.individual.first_name, client.individual.middle_name]
+                name = " ".join(p for p in parts if p)
+            elif client.legal_entity:
+                name = client.legal_entity.full_name
+
+            if not name:
+                continue
+
+            stats["total"] += 1
+
+            matches = search_sanctions(db=db, query_name=name, list_codes=active_codes)
+
+            if any(m["match_tier"] == "confirmed" for m in matches):
+                result = "match"
+                stats["confirmed"] += 1
+            elif any(m["match_tier"] == "probable" for m in matches):
+                result = "possible_match"
+                stats["probable"] += 1
+            elif matches:
+                result = "possible_match"
+                stats["possible"] += 1
+            else:
+                result = "clear"
+                stats["clear"] += 1
+
+            # Проверяем, изменился ли результат по сравнению с последней проверкой
+            last_check = db.query(models.SanctionsCheck).filter(
+                models.SanctionsCheck.client_id == client.id,
+                models.SanctionsCheck.company_id == current_user.company_id,
+            ).order_by(models.SanctionsCheck.checked_at.desc()).first()
+
+            is_new_hit = (result != "clear") and (last_check is None or last_check.result == "clear")
+            if is_new_hit:
+                stats["new_hits"] += 1
+                new_hits.append({"client_id": client.id, "name": name, "result": result})
+
+            check = models.SanctionsCheck(
+                client_id=client.id,
+                company_id=current_user.company_id,
+                checked_name=name,
+                lists_checked=active_codes,
+                result=result,
+                matches=matches,
+                checked_by=current_user.id,
+                notes="Автоматический пересмотр" + (" · НОВОЕ СОВПАДЕНИЕ" if is_new_hit else ""),
+            )
+            db.add(check)
+            client.last_screening_at = datetime.utcnow()
+
+        except Exception:
+            stats["errors"] += 1
+
+    db.add(models.AuditLog(
+        company_id=current_user.company_id,
+        user_id=current_user.id,
+        action="sanctions.rescreening",
+        entity_type="sanctions",
+        new_value=stats,
+    ))
+    db.commit()
+
+    return {**stats, "new_hits_detail": new_hits}

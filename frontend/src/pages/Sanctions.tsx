@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import {
   Search, Upload, RefreshCw, CheckCircle2,
-  AlertTriangle, XCircle, Clock, FileText,
-  ChevronDown, ChevronUp, Info
+  AlertTriangle, XCircle, Users,
+  ChevronDown, ChevronUp, Info, ShieldAlert
 } from 'lucide-react'
 import api from '../api/client'
 import { format } from 'date-fns'
@@ -14,7 +14,29 @@ import clsx from 'clsx'
 const RESULT_CONFIG = {
   clear: { label: 'Совпадений не найдено', color: 'text-green-400', bg: 'bg-green-400/10 border-green-400/20', icon: CheckCircle2 },
   possible_match: { label: 'Возможное совпадение', color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20', icon: AlertTriangle },
-  match: { label: 'Совпадение найдено', color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', icon: XCircle },
+  match: { label: 'Подтверждённое совпадение', color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', icon: XCircle },
+}
+
+// Три уровня совпадений
+const TIER_CONFIG = {
+  confirmed: {
+    label: 'Подтверждено',
+    badge: 'bg-red-500/20 text-red-400 border border-red-500/30',
+    card: 'border-red-500/40 bg-red-500/5',
+    dot: 'bg-red-500',
+  },
+  probable: {
+    label: 'Вероятное',
+    badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/30',
+    card: 'border-orange-500/40 bg-orange-500/5',
+    dot: 'bg-orange-400',
+  },
+  possible: {
+    label: 'Возможное',
+    badge: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+    card: 'border-yellow-500/40 bg-yellow-500/5',
+    dot: 'bg-yellow-400',
+  },
 }
 
 const LIST_NAMES: Record<string, string> = {
@@ -140,23 +162,21 @@ function ListsManager({ lists, onRefresh }: { lists: any[]; onRefresh: () => voi
 
 function MatchCard({ match }: { match: any }) {
   const [open, setOpen] = useState(false)
+  const tier = TIER_CONFIG[match.match_tier as keyof typeof TIER_CONFIG] || TIER_CONFIG.possible
 
   return (
-    <div className={clsx(
-      'border rounded-xl overflow-hidden',
-      match.match_level === 'match' ? 'border-red-500/30 bg-red-500/5' : 'border-yellow-500/30 bg-yellow-500/5'
-    )}>
+    <div className={clsx('border rounded-xl overflow-hidden', tier.card)}>
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-3 text-left"
       >
         <div className="flex items-center gap-3">
-          <span className={clsx(
-            'text-xs font-bold px-2 py-0.5 rounded',
-            match.match_level === 'match' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
-          )}>
-            {match.score}%
-          </span>
+          <div className="text-center min-w-[52px]">
+            <span className={clsx('text-xs font-bold px-2 py-0.5 rounded', tier.badge)}>
+              {match.score}%
+            </span>
+            <p className="text-[10px] text-[#6b7280] mt-0.5">{tier.label}</p>
+          </div>
           <div>
             <p className="text-sm font-medium text-white">{match.primary_name}</p>
             <p className="text-xs text-[#6b7280]">{LIST_NAMES[match.list_code] || match.list_code}</p>
@@ -202,6 +222,82 @@ function MatchCard({ match }: { match: any }) {
     </div>
   )
 }
+
+// ─── Массовый пересмотр ───────────────────────────────────────────────────────
+
+function RescreeningPanel({ onDone }: { onDone: () => void }) {
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<any>(null)
+
+  const handleRun = async () => {
+    setRunning(true)
+    setResult(null)
+    try {
+      const { data } = await api.post('/sanctions/rescreening')
+      setResult(data)
+      onDone()
+    } catch (e: any) {
+      setResult({ error: e.response?.data?.detail || 'Ошибка' })
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="bg-[#111520] border border-[#1e2535] rounded-xl p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <ShieldAlert className="w-4 h-4 text-[#d4a843]" />
+        <h3 className="text-sm font-semibold text-white">Массовый пересмотр</h3>
+      </div>
+      <p className="text-xs text-[#6b7280]">
+        Повторная проверка всех активных клиентов по текущим санкционным спискам. Новые совпадения будут отмечены.
+      </p>
+
+      <button
+        onClick={handleRun}
+        disabled={running}
+        className="flex items-center gap-2 bg-[#1e2535] hover:bg-[#252d42] disabled:opacity-50 border border-[#2d3748] text-white text-sm px-4 py-2.5 rounded-lg transition-colors w-full justify-center"
+      >
+        <Users className={clsx('w-4 h-4', running && 'animate-pulse')} />
+        {running ? 'Пересмотр...' : 'Запустить пересмотр'}
+      </button>
+
+      {result && !result.error && (
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="bg-[#0a0d14] rounded-lg p-2.5 text-center">
+            <p className="text-[#6b7280]">Всего</p>
+            <p className="text-white font-bold text-lg">{result.total}</p>
+          </div>
+          <div className="bg-[#0a0d14] rounded-lg p-2.5 text-center">
+            <p className="text-[#6b7280]">Чисто</p>
+            <p className="text-green-400 font-bold text-lg">{result.clear}</p>
+          </div>
+          <div className="bg-[#0a0d14] rounded-lg p-2.5 text-center">
+            <p className="text-[#6b7280]">Вероятных</p>
+            <p className="text-orange-400 font-bold text-lg">{result.probable}</p>
+          </div>
+          <div className="bg-[#0a0d14] rounded-lg p-2.5 text-center">
+            <p className="text-[#6b7280]">Подтверждённых</p>
+            <p className="text-red-400 font-bold text-lg">{result.confirmed}</p>
+          </div>
+          {result.new_hits > 0 && (
+            <div className="col-span-2 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 text-center">
+              <p className="text-red-400 font-semibold">⚠ {result.new_hits} новых совпадений</p>
+              {result.new_hits_detail?.slice(0, 3).map((h: any, i: number) => (
+                <p key={i} className="text-[#9ca3af] text-[11px] mt-0.5">#{h.client_id} {h.name}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {result?.error && (
+        <p className="text-red-400 text-xs">{result.error}</p>
+      )}
+    </div>
+  )
+}
+
 
 // ─── История проверок ─────────────────────────────────────────────────────────
 
@@ -365,9 +461,24 @@ export default function Sanctions() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-[#4b5563]">
-                <Info className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Поиск ведётся с учётом транслитерации и похожих написаний. Порог совпадения: 75%</span>
+              <div className="bg-[#0a0d14] rounded-lg p-3 space-y-1.5">
+                <p className="text-[10px] text-[#4b5563] uppercase tracking-wider font-semibold mb-2">Уровни совпадений</p>
+                {[
+                  { tier: 'confirmed', range: '≥ 92%', desc: 'Блокировка / немедленный эскалейт' },
+                  { tier: 'probable',  range: '78–91%', desc: 'Требует проверки офицером' },
+                  { tier: 'possible',  range: '60–77%', desc: 'Обратить внимание' },
+                ].map(({ tier, range, desc }) => {
+                  const t = TIER_CONFIG[tier as keyof typeof TIER_CONFIG]
+                  return (
+                    <div key={tier} className="flex items-center gap-2">
+                      <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', t.dot)} />
+                      <span className={clsx('text-xs font-medium w-16', t.badge.includes('red') ? 'text-red-400' : t.badge.includes('orange') ? 'text-orange-400' : 'text-yellow-400')}>
+                        {range}
+                      </span>
+                      <span className="text-xs text-[#6b7280]">{desc}</span>
+                    </div>
+                  )
+                })}
               </div>
 
               <button
@@ -413,8 +524,9 @@ export default function Sanctions() {
             )}
           </div>
 
-          {/* История */}
-          <div>
+          {/* История + Пересмотр */}
+          <div className="space-y-4">
+            <RescreeningPanel onDone={loadData} />
             <History history={history} />
           </div>
         </div>
