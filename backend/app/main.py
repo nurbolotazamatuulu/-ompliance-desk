@@ -20,13 +20,23 @@ from app.routers import dashboard as dashboard_router
 from app.routers import regulations as regulations_router
 from app.routers import reports as reports_router
 from app.routers import settings as settings_router
+from app.routers import pep as pep_router
+from app.routers import high_risk_countries as hrc_router
+from app.routers.high_risk_countries import seed_high_risk_countries
 from app.sanctions_models import SanctionsList, SanctionEntry
+from app.database import SessionLocal
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Создаём все таблицы при старте (если не существуют)
     Base.metadata.create_all(bind=engine)
+    # Заполняем справочник высокорисковых стран
+    db = SessionLocal()
+    try:
+        seed_high_risk_countries(db)
+    finally:
+        db.close()
     yield
 
 
@@ -59,6 +69,8 @@ app.include_router(dashboard_router.router)
 app.include_router(regulations_router.router)
 app.include_router(reports_router.router)
 app.include_router(settings_router.router)
+app.include_router(pep_router.router)
+app.include_router(hrc_router.router)
 
 
 @app.get("/health")

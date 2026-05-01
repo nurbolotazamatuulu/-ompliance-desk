@@ -15,13 +15,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Перехватчик ответов — если 401 (токен истёк), выбрасываем из системы
+// Перехватчик ответов
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    if (status === 401) {
       useAuthStore.getState().logout()
       window.location.href = '/login'
+    } else if (status === 403) {
+      console.warn('Доступ запрещён:', error.config?.url)
+    } else if (status >= 500) {
+      console.error('Ошибка сервера:', status, error.config?.url, error.response?.data?.detail)
     }
     return Promise.reject(error)
   }

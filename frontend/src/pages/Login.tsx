@@ -31,7 +31,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#0d1017] flex items-center justify-center p-4">
 
       {/* Фоновая сетка */}
       <div
@@ -70,7 +70,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
-                className="w-full bg-[#0a0d14] border border-[#1e2535] rounded-lg px-4 py-3 text-white text-sm placeholder-[#374151] focus:outline-none focus:border-[#d4a843]/50 focus:ring-1 focus:ring-[#d4a843]/20 transition-colors"
+                className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-4 py-3 text-white text-sm placeholder-[#374151] focus:outline-none focus:border-[#d4a843]/50 focus:ring-1 focus:ring-[#d4a843]/20 transition-colors"
                 placeholder="officer@company.kg"
               />
             </div>
@@ -86,7 +86,7 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="w-full bg-[#0a0d14] border border-[#1e2535] rounded-lg px-4 py-3 pr-12 text-white text-sm placeholder-[#374151] focus:outline-none focus:border-[#d4a843]/50 focus:ring-1 focus:ring-[#d4a843]/20 transition-colors"
+                  className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-4 py-3 pr-12 text-white text-sm placeholder-[#374151] focus:outline-none focus:border-[#d4a843]/50 focus:ring-1 focus:ring-[#d4a843]/20 transition-colors"
                   placeholder="••••••••"
                 />
                 <button
@@ -109,7 +109,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#d4a843] hover:bg-[#e0b84d] disabled:opacity-50 disabled:cursor-not-allowed text-[#0a0d14] font-bold py-3 rounded-lg text-sm uppercase tracking-widest transition-all duration-200"
+              className="w-full bg-[#d4a843] hover:bg-[#e0b84d] disabled:opacity-50 text-[#0a0d14] font-bold py-3 rounded-lg text-sm uppercase tracking-widest transition-all duration-200"
             >
               {loading ? 'Вход...' : 'Войти'}
             </button>

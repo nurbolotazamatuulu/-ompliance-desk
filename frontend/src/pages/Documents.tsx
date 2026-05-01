@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react'
-import { FileText, AlertTriangle, Clock, CheckCircle2, XCircle, ChevronRight, Filter } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { FileText, AlertTriangle, Clock, CheckCircle2, XCircle, ChevronRight, Search, X } from 'lucide-react'
+import { fmtDate } from '../utils/dates'
 import { Link } from 'react-router-dom'
 import api from '../api/client'
 import clsx from 'clsx'
+import { useSortable } from '../hooks/useSortable'
+import StatCard from '../components/StatCard'
+import SortTh from '../components/SortTh'
+import EmptyState from '../components/EmptyState'
 
 interface DocItem {
   id: number | null
@@ -41,7 +46,7 @@ function expiryColor(days: number | null | undefined): string {
 
 function expiryLabel(days: number | null | undefined, expires_at?: string): string {
   if (!expires_at) return '—'
-  const d = new Date(expires_at).toLocaleDateString('ru-RU')
+  const d = fmtDate(expires_at)
   if (days == null) return d
   if (days < 0)    return `Просрочен ${Math.abs(days)} дн.`
   if (days === 0)  return 'Истекает сегодня!'
@@ -63,6 +68,8 @@ export default function Documents() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter]   = useState('')
   const [search, setSearch]   = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadDocs(filter) }, [filter])
 
@@ -79,13 +86,15 @@ export default function Documents() {
     }
   }
 
-  const filtered = docs.filter(d => {
+  const preFiltered = docs.filter(d => {
     const q = search.toLowerCase()
     return (
       d.client_name.toLowerCase().includes(q) ||
       d.label.toLowerCase().includes(q)
     )
   })
+
+  const { sorted: filtered, sortKey, sortDir, toggle } = useSortable(preFiltered, 'client_name')
 
   // Статистика (всегда по всем, без фильтра статуса)
   const stats = {
@@ -97,80 +106,72 @@ export default function Documents() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="flex flex-col h-full">
 
-      {/* Заголовок */}
-      <div className="flex items-center gap-3">
-        <FileText className="w-6 h-6 text-[#d4a843]" />
-        <div>
-          <h1 className="text-xl font-bold text-white">Документы и дедлайны</h1>
-          <p className="text-xs text-[#6b7280]">Контроль обязательных документов по всем клиентам</p>
+      <div className="page-header">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <FileText className="w-5 h-5 text-[#d4a843] flex-shrink-0" />
+            <div>
+              <h1 className="page-title">Документы и дедлайны</h1>
+              <p className="page-subtitle">{loading ? '...' : `${filtered.length} записей`}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className={clsx('transition-all duration-200 overflow-hidden', searchOpen || search ? 'w-56 opacity-100' : 'w-0 opacity-0')}>
+              <div className="relative">
+                <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
+                  onBlur={() => { if (!search) setSearchOpen(false) }}
+                  placeholder="Клиент или документ..."
+                  className="form-input-sm pl-3 pr-8" />
+                {search && (
+                  <button onClick={() => { setSearch(''); setSearchOpen(false) }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#4b5563] hover:text-white transition-colors">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <button onClick={() => { setSearchOpen(v => !v); if (!searchOpen) setTimeout(() => searchRef.current?.focus(), 50) }}
+              className={clsx('btn-icon', searchOpen || search ? 'border-[#d4a843]/40 text-[#d4a843] bg-[#d4a843]/5' : '')}>
+              <Search className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
+
+      <div className="flex-1 overflow-auto p-6 space-y-4">
 
       {/* Статистика */}
       <div className="grid grid-cols-5 gap-3">
-        {[
-          { label: 'Отсутствуют',     value: stats.missing,   color: 'text-[#6b7280]',    border: 'border-[#1e2535]' },
-          { label: 'Запрошены',       value: stats.requested, color: 'text-blue-400',      border: 'border-blue-400/20' },
-          { label: 'Истекают 30 дн.', value: stats.expiring,  color: 'text-orange-400',    border: 'border-orange-400/20' },
-          { label: 'Просрочены',      value: stats.expired,   color: 'text-red-400',       border: 'border-red-400/20' },
-          { label: 'Получены',        value: stats.present,   color: 'text-green-400',     border: 'border-green-400/20' },
-        ].map(s => (
-          <div key={s.label} className={clsx('bg-[#0d1017] border rounded-xl p-4', s.border)}>
-            <p className={clsx('text-2xl font-bold', s.color)}>{s.value}</p>
-            <p className="text-xs text-[#6b7280] mt-0.5">{s.label}</p>
-          </div>
+        <StatCard label="Отсутствуют"     value={stats.missing}   color="text-[#6b7280]"    border="border-[#1e2535]" />
+        <StatCard label="Запрошены"       value={stats.requested} color="text-blue-400"      border="border-blue-400/20" />
+        <StatCard label="Истекают 30 дн." value={stats.expiring}  color="text-orange-400"    border="border-orange-400/20" />
+        <StatCard label="Просрочены"      value={stats.expired}   color="text-red-400"       border="border-red-400/20" />
+        <StatCard label="Получены"        value={stats.present}   color="text-green-400"     border="border-green-400/20" />
+      </div>
+
+      <div className="tabs w-fit">
+        {FILTER_TABS.map(t => (
+          <button key={t.key} onClick={() => setFilter(t.key)} className={clsx('tab', filter === t.key && 'tab-active')}>
+            {t.label}
+          </button>
         ))}
       </div>
 
-      {/* Фильтры + поиск */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-1 bg-[#111520] border border-[#1e2535] rounded-lg p-1 flex-wrap">
-          {FILTER_TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setFilter(t.key)}
-              className={clsx(
-                'px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap',
-                filter === t.key
-                  ? 'bg-[#d4a843] text-[#0a0d14]'
-                  : 'text-[#6b7280] hover:text-white'
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Поиск по клиенту или документу..."
-          className="flex-1 bg-[#111520] border border-[#1e2535] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50 placeholder-[#374151]"
-        />
-      </div>
-
-      <p className="text-xs text-[#4b5563]">
-        {loading ? 'Загрузка...' : `${filtered.length} записей`}
-      </p>
-
-      {/* Таблица */}
       {!loading && (
-        <div className="bg-[#0d1017] border border-[#1e2535] rounded-xl overflow-hidden">
+        <div className="card overflow-hidden">
           {filtered.length === 0 ? (
-            <div className="text-center py-16 text-[#4b5563]">
-              <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p>Документов не найдено</p>
-            </div>
+            <EmptyState icon={FileText} title="Документов не найдено" />
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#1e2535] text-[10px] uppercase tracking-widest text-[#4b5563]">
-                  <th className="text-left px-4 py-3">Клиент</th>
-                  <th className="text-left px-4 py-3">Документ</th>
-                  <th className="text-left px-4 py-3">Статус</th>
-                  <th className="text-left px-4 py-3">Получен</th>
-                  <th className="text-left px-4 py-3">Действителен до</th>
+                <tr className="border-b border-[#1e2535] bg-[#0d1017]">
+                  <SortTh label="Клиент"           field="client_name"      current={String(sortKey)} dir={sortDir} onSort={toggle} className="px-4 py-3" />
+                  <SortTh label="Документ"         field="label"            current={String(sortKey)} dir={sortDir} onSort={toggle} className="px-4 py-3" />
+                  <SortTh label="Статус"           field="status"           current={String(sortKey)} dir={sortDir} onSort={toggle} className="px-4 py-3" />
+                  <SortTh label="Получен"          field="received_at"      current={String(sortKey)} dir={sortDir} onSort={toggle} className="px-4 py-3" />
+                  <SortTh label="Действителен до"  field="days_until_expiry" current={String(sortKey)} dir={sortDir} onSort={toggle} className="px-4 py-3" />
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -194,19 +195,19 @@ export default function Documents() {
                           {d.client_name}
                           <ChevronRight className="w-3 h-3" />
                         </Link>
-                        <p className="text-[10px] text-[#4b5563] mt-0.5">
+                        <p className="text-xs text-[#4b5563] mt-0.5">
                           {d.client_type === 'individual' ? 'Физлицо' : 'Юрлицо'}
                         </p>
                       </td>
                       <td className="px-4 py-3 text-[#d1d5db] text-xs">{d.label}</td>
                       <td className="px-4 py-3">
-                        <span className={clsx('flex items-center gap-1.5 text-[10px] font-medium w-fit px-2 py-0.5 rounded-full', sc.color)}>
+                        <span className={clsx('flex items-center gap-1.5 text-xs font-medium w-fit px-2 py-0.5 rounded-full', sc.color)}>
                           <StatusIcon className="w-3 h-3" />
                           {sc.label}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-[#6b7280] text-xs">
-                        {d.received_at ? new Date(d.received_at).toLocaleDateString('ru-RU') : '—'}
+                        {fmtDate(d.received_at)}
                       </td>
                       <td className={clsx('px-4 py-3 text-xs font-medium', expiryColor(d.days_until_expiry))}>
                         {d.has_expiry ? expiryLabel(d.days_until_expiry, d.expires_at) : '—'}
@@ -214,7 +215,7 @@ export default function Documents() {
                       <td className="px-4 py-3">
                         <Link
                           to={`/clients/${d.client_id}?tab=docs`}
-                          className="text-[10px] text-[#4b5563] hover:text-[#d4a843] transition-colors"
+                          className="text-xs text-[#4b5563] hover:text-[#d4a843] transition-colors"
                         >
                           Открыть →
                         </Link>
@@ -227,6 +228,7 @@ export default function Documents() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }

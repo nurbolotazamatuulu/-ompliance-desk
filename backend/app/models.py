@@ -147,6 +147,9 @@ class Client(Base):
     manager_code = Column(String(4))              # 4-значный код менеджера
     notes = Column(Text)
     is_active = Column(Boolean, default=True)
+    archived_at = Column(DateTime, nullable=True)
+    archived_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    archive_reason = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
     created_by = Column(Integer, ForeignKey("users.id"))
@@ -155,9 +158,12 @@ class Client(Base):
     company = relationship("Company", back_populates="clients")
     individual = relationship("IndividualClient", back_populates="client", uselist=False)
     legal_entity = relationship("LegalEntityClient", back_populates="client", uselist=False)
+    directors = relationship("DirectorClient", foreign_keys="[DirectorClient.client_id]",
+                             primaryjoin="Client.id == DirectorClient.client_id")
     documents = relationship("ClientDocument", back_populates="client")
     ubos = relationship("UBO", back_populates="client")
     pep_records = relationship("PEPRecord", back_populates="client")
+    pep_questionnaire = relationship("PEPQuestionnaire", back_populates="client", uselist=False)
     sanctions_checks = relationship("SanctionsCheck", back_populates="client")
     sumsub_records = relationship("SumsubRecord", back_populates="client")
     scoring_history = relationship("RiskScoringHistory", back_populates="client")
@@ -220,6 +226,7 @@ class IndividualClient(Base):
 
     # Для ИП
     is_individual_entrepreneur = Column(Boolean, default=False)
+    ie_inn = Column(String(50))
     ie_registration_date = Column(DateTime)
     ie_registration_number = Column(String(100))
     ie_registration_authority = Column(String(255))
@@ -230,6 +237,14 @@ class IndividualClient(Base):
     ie_patent_issued_by = Column(String(255))
     ie_patent_expires_at = Column(DateTime)
     ie_activities = Column(Text)
+
+    # Информация о банковском счёте
+    bank1_account = Column(String(100))
+    bank1_name = Column(String(255))
+    bank1_location = Column(String(255))
+    bank1_inn = Column(String(50))
+    bank1_corr_account = Column(String(100))
+    bank1_bic_swift = Column(String(50))
 
     # Глава 3. Верификация (заполняется офицером)
     verification_status = Column(String(20))             # conducted / not_conducted
@@ -263,6 +278,7 @@ class LegalEntityClient(Base):
     legal_form = Column(String(100))                     # Организационно-правовая форма
     inn_resident = Column(String(20))                    # ИНН для резидента
     inn_nonresident = Column(String(50))                 # ИНН/КИО для нерезидента
+    lei = Column(String(50))                             # Legal Entity Identifier (поле 17)
 
     # Государственная регистрация
     reg_date = Column(DateTime)
@@ -283,15 +299,33 @@ class LegalEntityClient(Base):
     email = Column(String(255))
     actual_address = Column(Text)                        # Фактический адрес если отличается
 
-    # Глава 2. Уставные документы
+    # Глава 2. Уставные документы (поля 21–29 Анкеты ЮЛ)
     management_structure = Column(JSON)                  # Органы управления (JSON)
-    authority_documents = Column(Text)                   # Документы о полномочиях
-    authorized_capital = Column(Text)                    # Уставной капитал
+    governing_body_name = Column(String(255))            # Наименование органа (поле 21)
+    governing_body_members = Column(Text)                # ФИО членов органа (поле 22)
+    authorized_signatories = Column(Text)                # Должностные лица с правом подписи (поле 23)
+    authority_doc_details = Column(Text)                 # Документы о полномочиях (поле 24)
+    authority_documents = Column(Text)                   # Устаревшее текстовое поле (сохраняется)
+    authorized_capital = Column(Text)                    # Уставной капитал (поле 25)
     has_local_presence = Column(Boolean)                 # Присутствие по местонахождению
     branches_info = Column(Text)                         # Филиалы и представительства
     has_ubo = Column(Boolean, default=True)
     ubo_is_resident = Column(Boolean)
     has_pdl_in_structure = Column(Boolean, default=False)
+
+    # Банковские счета (поля 38–47 Анкеты ЮЛ)
+    bank1_account = Column(String(100))
+    bank1_name = Column(String(255))
+    bank1_location = Column(String(255))
+    bank1_inn = Column(String(50))
+    bank1_corr_account = Column(String(100))
+    bank1_bic_swift = Column(String(50))
+    bank2_account = Column(String(100))
+    bank2_name = Column(String(255))
+    bank2_location = Column(String(255))
+    bank2_inn = Column(String(50))
+    bank2_corr_account = Column(String(100))
+    bank2_bic_swift = Column(String(50))
 
     # Глава 3. Деловой профиль
     license_type = Column(String(100))
@@ -314,6 +348,61 @@ class LegalEntityClient(Base):
     db_entry_officer = Column(String(255))
 
     client = relationship("Client", back_populates="legal_entity")
+    directors = relationship("DirectorClient", back_populates="legal_entity",
+                             foreign_keys="[DirectorClient.client_id]",
+                             primaryjoin="LegalEntityClient.client_id == DirectorClient.client_id")
+
+
+class DirectorClient(Base):
+    """
+    Анкета ФЛ директора юридического лица (поля 1–33 Анкеты клиента-ФЛ).
+    Привязана к юридическому лицу, а не к отдельному клиенту.
+    """
+    __tablename__ = "director_clients"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+
+    position = Column(String(255))           # Должность (Директор / Ген. директор / и т.д.)
+    is_active = Column(Boolean, default=True)
+    is_resident = Column(Boolean, default=True)
+    last_name = Column(String(100))
+    first_name = Column(String(100))
+    middle_name = Column(String(100))
+    date_of_birth = Column(DateTime)
+    place_of_birth = Column(String(255))
+    nationality = Column(String(100))
+    gender = Column(String(10))
+    citizenship = Column(String(100))
+    marital_status = Column(String(50))
+    pin = Column(String(20))
+
+    doc_type = Column(String(100))
+    doc_series_number = Column(String(50))
+    doc_issued_at = Column(DateTime)
+    doc_expires_at = Column(DateTime)
+    doc_issued_by = Column(String(255))
+    doc_division_code = Column(String(20))
+
+    registration_address = Column(Text)
+    actual_address = Column(Text)
+    phone_mobile = Column(String(30))
+    phone_work = Column(String(30))
+    email = Column(String(255))
+
+    foreign_doc_type = Column(String(50))
+    foreign_doc_series_number = Column(String(50))
+    foreign_doc_valid_from = Column(DateTime)
+    foreign_doc_valid_to = Column(DateTime)
+
+    business_purpose = Column(Text)
+    is_pep = Column(Boolean, default=False)
+    authority_documents = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+
+    legal_entity = relationship("LegalEntityClient", back_populates="directors",
+                                foreign_keys="[DirectorClient.client_id]",
+                                primaryjoin="DirectorClient.client_id == LegalEntityClient.client_id")
 
 
 class ClientRepresentative(Base):
@@ -329,27 +418,36 @@ class ClientRepresentative(Base):
     # Тип полномочий
     authority_type = Column(String(50))  # power_of_attorney / trust_management / other
 
-    # Идентификационные сведения представителя
-    last_name = Column(String(100), nullable=False)
-    first_name = Column(String(100), nullable=False)
+    # Тип доверителя: ФЛ или ЮЛ
+    is_legal_entity = Column(Boolean, default=False)
+
+    # Для ФЛ-доверителя
+    last_name = Column(String(100))
+    first_name = Column(String(100))
     middle_name = Column(String(100))
     date_of_birth = Column(DateTime)
     citizenship = Column(String(100))
     pin = Column(String(20))
-
-    # Документ, удостоверяющий личность
     doc_type = Column(String(100))
     doc_series_number = Column(String(50))
     doc_issued_at = Column(DateTime)
     doc_expires_at = Column(DateTime)
     doc_issued_by = Column(String(255))
 
-    # Реквизиты доверенности / договора доверительного управления
-    authority_doc_number = Column(String(50))     # Номер доверенности
-    authority_doc_date = Column(DateTime)          # Дата выдачи
-    authority_doc_expires_at = Column(DateTime)    # Срок действия
-    authority_doc_notary = Column(String(255))     # Нотариус (если нотариально удостоверена)
-    authority_scope = Column(Text)                 # Объём полномочий
+    # Для ЮЛ-доверителя
+    company_name = Column(String(255))
+    company_inn = Column(String(50))
+    company_legal_form = Column(String(100))
+    company_reg_number = Column(String(100))
+    company_legal_address = Column(Text)
+    company_actual_address = Column(Text)
+
+    # Реквизиты документа о полномочиях (доверенность / договор)
+    authority_doc_number = Column(String(50))
+    authority_doc_date = Column(DateTime)
+    authority_doc_expires_at = Column(DateTime)
+    authority_doc_notary = Column(String(255))
+    authority_scope = Column(Text)
 
     # Контакты
     phone = Column(String(30))
@@ -369,16 +467,64 @@ class UBO(Base):
     __tablename__ = "ubos"
 
     id = Column(Integer, primary_key=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)  # Юрлицо
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+
+    # ФИО
     last_name = Column(String(100), nullable=False)
     first_name = Column(String(100), nullable=False)
     middle_name = Column(String(100))
+
+    # Персональные данные
     date_of_birth = Column(DateTime)
-    nationality = Column(String(100))
-    passport_number = Column(String(50))
-    ownership_percentage = Column(Float)       # Доля владения %
-    ownership_chain = Column(Text)             # Описание цепочки владения
-    is_ultimate = Column(Boolean, default=True)  # Конечный УБО?
+    place_of_birth = Column(String(255))
+    nationality = Column(String(100))           # Гражданство
+    country_of_residence = Column(String(100))  # Страна проживания
+    pin = Column(String(20))                    # ИНН / ПИН
+
+    # Документ
+    doc_type = Column(String(100))
+    doc_series_number = Column(String(50))
+    doc_issued_by = Column(String(255))
+    doc_issued_at = Column(DateTime)
+    doc_expires_at = Column(DateTime)
+
+    # Адреса и контакты
+    registration_address = Column(Text)
+    actual_address = Column(Text)
+    phone = Column(String(30))
+    email = Column(String(255))
+
+    # Владение
+    ownership_percentage = Column(Float)
+    control_type = Column(String(50))           # direct / indirect
+    recognition_basis = Column(Text)            # Доп. примечания к основанию
+    recognition_criteria = Column(JSON, default=list)  # [{code, selected, details}]
+    ownership_chain = Column(Text)
+    is_ultimate = Column(Boolean, default=True)
+
+    # Комплаенс
+    is_pep = Column(Boolean, default=False)
+    source_of_funds = Column(Text)              # Источник происхождения средств (общий)
+    relationship_purpose = Column(Text)         # Цель деловых отношений
+
+    # Поля анкеты ПДЛ (заполняются если is_pep=True)
+    pdl_position = Column(String(255))          # Занимаемая должность
+    pdl_appointment_date = Column(DateTime)     # Дата назначения
+    pdl_release_date = Column(DateTime)         # Дата освобождения
+    pdl_source_of_funds = Column(Text)          # ИПДС ПДЛ
+    pdl_approval_notes = Column(Text)           # Письменное разрешение на обслуживание
+    pdl_family_members = Column(JSON, default=list)   # Члены семьи ПДЛ
+    pdl_close_associates = Column(JSON, default=list) # Близкие лица ПДЛ
+
+    # Тип влияния (для БВ физического лица)
+    influence_type = Column(String(100))  # родитель / усыновитель / опекун / попечитель / другое
+
+    # Статус резидентства
+    residency_status = Column(String(50))  # резидент / нерезидент
+
+    # Архивация (каскадно при архивации клиента)
+    is_archived = Column(Boolean, default=False, nullable=False)
+
     verified_at = Column(DateTime)
     notes = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
@@ -389,11 +535,12 @@ class UBO(Base):
 # ─── ИПДС / ПДЛ ───────────────────────────────────────────────────────────────
 
 class PEPRecord(Base):
-    """Запись об ИПДС (иностранное публичное должностное лицо) или ПДЛ."""
+    """Запись о ПДЛ (публичное должностное лицо КР) или ИПДЛ (иностранное ПДЛ)."""
     __tablename__ = "pep_records"
 
     id = Column(Integer, primary_key=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    ubo_id = Column(Integer, ForeignKey("ubos.id", ondelete="CASCADE"), nullable=True)
     pep_type = Column(String(50))          # PEP, IPEP, FAMILY, ASSOCIATE
     position = Column(String(255))         # Должность
     organization = Column(String(255))     # Организация
@@ -405,6 +552,35 @@ class PEPRecord(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     client = relationship("Client", back_populates="pep_records")
+
+
+class PEPQuestionnaire(Base):
+    """Анкета ПДЛ (типовая форма по Постановлению КР №606)."""
+    __tablename__ = "pep_questionnaires"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, unique=True)
+    is_primary = Column(Boolean, default=True)   # True=первичная, False=обновлённая
+
+    # Глава 2. Деловой профиль ПДЛ
+    position = Column(String(255))               # Занимаемая должность
+    appointment_date = Column(DateTime)          # Дата назначения
+    release_date = Column(DateTime)              # Дата освобождения
+    source_of_funds = Column(Text)              # Источник происхождения средств
+    approval_notes = Column(Text)               # Письменное разрешение на обслуживание
+
+    # Глава 3. Члены семьи (JSON-массив)
+    # [{relation, last_name, first_name, middle_name, gender, date_of_birth, pin, citizenship}]
+    family_members = Column(JSON, default=list)
+
+    # Глава 4. Близкие лица (JSON-массив)
+    # [{relation_type, last_name, first_name, middle_name, gender, date_of_birth, pin, citizenship}]
+    close_associates = Column(JSON, default=list)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    client = relationship("Client", back_populates="pep_questionnaire")
 
 
 # ─── Документы клиента ────────────────────────────────────────────────────────
@@ -444,6 +620,17 @@ class SanctionsCheck(Base):
     checked_by = Column(Integer, ForeignKey("users.id"))
     checked_at = Column(DateTime, server_default=func.now())
     notes = Column(Text)
+
+    # Субъект проверки (client | ubo | director | pep_family | pep_associate | signatory)
+    subject_type = Column(String(50))
+    subject_id = Column(Integer)          # ID субъекта (UBO.id / DirectorClient.id), NULL для JSON-субъектов
+    subject_name = Column(String(255))    # Денормализованное имя субъекта для отображения
+
+    # Решение офицера комплаенс
+    officer_decision = Column(String(20))       # confirmed / false_positive
+    officer_notes = Column(Text)
+    officer_id = Column(Integer, ForeignKey("users.id"))
+    officer_decided_at = Column(DateTime)
 
     client = relationship("Client", back_populates="sanctions_checks")
 
@@ -652,6 +839,42 @@ class RegulatoryDocument(Base):
     created_at   = Column(DateTime, server_default=func.now())
     updated_at   = Column(DateTime, onupdate=func.now())
     created_by   = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+# ─── Высокорисковые страны (Приказ ГСФР № 78-ө/п от 20.06.2025) ──────────────
+
+class HighRiskCountry(Base):
+    """Перечень высокорисковых стран с применяемыми мерами."""
+    __tablename__ = "high_risk_countries"
+
+    id            = Column(Integer, primary_key=True)
+    name_ru       = Column(String(200), nullable=False)
+    name_en       = Column(String(200), nullable=False)
+    basis         = Column(String(200))
+    measures      = Column(JSON, nullable=False)
+    order_ref     = Column(String(100), default="Приказ ГСФР № 78-ө/п от 20.06.2025")
+    is_active     = Column(Boolean, default=True)
+
+    audit_logs    = relationship("HighRiskCountryAudit", back_populates="country")
+
+
+class HighRiskCountryAudit(Base):
+    """Журнал изменений перечня высокорисковых стран."""
+    __tablename__ = "high_risk_country_audit"
+
+    id               = Column(Integer, primary_key=True)
+    country_id       = Column(Integer, ForeignKey("high_risk_countries.id"), nullable=True)
+    action           = Column(String(50), nullable=False)   # added / updated / deactivated / reactivated / pdf_uploaded
+    country_name_ru  = Column(String(200))                  # дублируем имя на случай удаления
+    old_value        = Column(JSON)
+    new_value        = Column(JSON)
+    changed_by_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    changed_by_name  = Column(String(200))                  # ФИО/email зафиксирован на момент изменения
+    changed_at       = Column(DateTime, server_default=func.now())
+    notes            = Column(Text)
+    pdf_filename     = Column(String(500))                  # имя загруженного PDF (если action=pdf_uploaded)
+
+    country          = relationship("HighRiskCountry", back_populates="audit_logs")
 
 
 # ─── Журнал аудита ────────────────────────────────────────────────────────────

@@ -34,7 +34,7 @@ CURRENCIES = ["KGS", "USD", "EUR", "RUB", "USDT", "BTC"]
 # ─── Схемы ────────────────────────────────────────────────────────────────────
 
 class SOFDocCreate(BaseModel):
-    client_id:       int
+    client_id:       Optional[int]  = None   # игнорируется — берётся из URL
     doc_type:        str
     description:     Optional[str]   = None
     document_number: Optional[str]   = None

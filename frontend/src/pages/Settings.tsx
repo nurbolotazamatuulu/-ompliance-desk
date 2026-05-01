@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react'
 import {
   Settings2, Building2, Users, User, Save, Plus,
   Trash2, Eye, EyeOff, ExternalLink, Shield,
-  CheckCircle2, AlertCircle, ChevronDown, Download
+  CheckCircle2, AlertCircle, ChevronDown, Download,
+  Sun, Moon, Monitor
 } from 'lucide-react'
+import { fmtDate } from '../utils/dates'
 import api from '../api/client'
 import { useAuthStore } from '../store/authStore'
+import { useThemeStore } from '../store/themeStore'
 import clsx from 'clsx'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -36,9 +39,10 @@ const ROLES: Record<string, string> = {
 }
 
 const TABS = [
-  { key: 'company', label: 'Компания',     icon: Building2 },
-  { key: 'users',   label: 'Пользователи', icon: Users },
-  { key: 'profile', label: 'Мой профиль',  icon: User },
+  { key: 'company',    label: 'Компания',       icon: Building2 },
+  { key: 'users',      label: 'Пользователи',   icon: Users },
+  { key: 'profile',    label: 'Мой профиль',    icon: User },
+  { key: 'appearance', label: 'Внешний вид',    icon: Monitor },
 ]
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -101,9 +105,10 @@ export default function Settings() {
         })}
       </div>
 
-      {tab === 'company' && <CompanyTab show={show} token={token} />}
-      {tab === 'users'   && <UsersTab show={show} />}
-      {tab === 'profile' && <ProfileTab show={show} />}
+      {tab === 'company'    && <CompanyTab show={show} token={token} />}
+      {tab === 'users'      && <UsersTab show={show} />}
+      {tab === 'profile'    && <ProfileTab show={show} />}
+      {tab === 'appearance' && <AppearanceTab />}
 
       {toast && <Toast msg={toast.msg} ok={toast.ok} />}
     </div>
@@ -159,7 +164,7 @@ function CompanyTab({ show, token }: { show: (msg: string, ok?: boolean) => void
     label: string; k: keyof Company; type?: string; placeholder?: string; full?: boolean
   }) => (
     <div className={full ? 'col-span-2' : ''}>
-      <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">{label}</label>
+      <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">{label}</label>
       {type === 'textarea' ? (
         <textarea
           value={(form[k] as string) || ''}
@@ -198,7 +203,7 @@ function CompanyTab({ show, token }: { show: (msg: string, ok?: boolean) => void
           <p className={clsx('text-sm font-medium', daysLeft <= 30 ? 'text-red-400' : 'text-yellow-400')}>
             {daysLeft <= 0
               ? 'Лицензия истекла!'
-              : `До истечения лицензии осталось ${daysLeft} дн. — ${licExpires?.toLocaleDateString('ru-RU')}`
+              : `До истечения лицензии осталось ${daysLeft} дн. — ${fmtDate(licExpires ?? undefined)}`
             }
           </p>
         </div>
@@ -245,7 +250,7 @@ function CompanyTab({ show, token }: { show: (msg: string, ok?: boolean) => void
         <button
           onClick={save}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#c49838] disabled:opacity-50 transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#e0b84d] disabled:opacity-50 transition-colors"
         >
           <Save className="w-4 h-4" />
           {saving ? 'Сохранение...' : 'Сохранить'}
@@ -295,7 +300,7 @@ function UsersTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
         <p className="text-sm text-[#6b7280]">{users.length} пользователей в системе</p>
         <button
           onClick={() => { setEditUser(null); setShowForm(true) }}
-          className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#c49838]"
+          className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#e0b84d]"
         >
           <Plus className="w-4 h-4" />
           Добавить
@@ -305,7 +310,7 @@ function UsersTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
       <div className="bg-[#0d1017] border border-[#1e2535] rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#1e2535] text-[10px] uppercase tracking-widest text-[#4b5563]">
+            <tr className="border-b border-[#1e2535] text-xs uppercase tracking-wider text-[#4b5563]">
               <th className="text-left px-4 py-3">Пользователь</th>
               <th className="text-left px-4 py-3">Роль</th>
               <th className="text-left px-4 py-3">Последний вход</th>
@@ -318,7 +323,7 @@ function UsersTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
               <tr key={u.id} className="border-b border-[#111520] last:border-0 hover:bg-[#111520]">
                 <td className="px-4 py-3">
                   <p className="text-white text-sm font-medium">{u.full_name}</p>
-                  <p className="text-[10px] text-[#4b5563] mt-0.5">{u.email}</p>
+                  <p className="text-xs text-[#4b5563] mt-0.5">{u.email}</p>
                 </td>
                 <td className="px-4 py-3">
                   <span className="text-xs bg-[#1e2535] text-[#9ca3af] px-2 py-0.5 rounded">
@@ -326,11 +331,11 @@ function UsersTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-xs text-[#6b7280]">
-                  {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('ru-RU') : 'Не входил'}
+                  {fmtDate(u.last_login_at) ?? 'Не входил'}
                 </td>
                 <td className="px-4 py-3">
                   <span className={clsx(
-                    'text-[10px] font-medium px-2 py-0.5 rounded-full',
+                    'text-xs font-medium px-2 py-0.5 rounded-full',
                     u.is_active ? 'bg-green-400/20 text-green-400' : 'bg-[#1e2535] text-[#4b5563]'
                   )}>
                     {u.is_active ? 'Активен' : 'Деактивирован'}
@@ -340,7 +345,7 @@ function UsersTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
                   <div className="flex items-center gap-2 justify-end">
                     <button
                       onClick={() => { setEditUser(u); setShowForm(true) }}
-                      className="text-[10px] text-[#4b5563] hover:text-[#d4a843] transition-colors"
+                      className="text-xs text-[#4b5563] hover:text-[#d4a843] transition-colors"
                     >
                       Изменить
                     </button>
@@ -348,13 +353,13 @@ function UsersTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
                       <>
                         <button
                           onClick={() => toggle(u)}
-                          className="text-[10px] text-[#4b5563] hover:text-white transition-colors"
+                          className="text-xs text-[#4b5563] hover:text-white transition-colors"
                         >
                           {u.is_active ? 'Деактив.' : 'Активир.'}
                         </button>
                         <button
                           onClick={() => remove(u)}
-                          className="text-[10px] text-[#4b5563] hover:text-red-400 transition-colors"
+                          className="text-xs text-[#4b5563] hover:text-red-400 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -423,19 +428,19 @@ function UserFormModal({ user, onClose, onSaved, onError }: {
         </div>
         <form onSubmit={submit} className="p-5 space-y-4">
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">ФИО</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">ФИО</label>
             <input value={form.full_name} onChange={e => set('full_name', e.target.value)} required
               className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50" />
           </div>
           {!user && (
             <div>
-              <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Email</label>
+              <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Email</label>
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} required
                 className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50" />
             </div>
           )}
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Роль</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Роль</label>
             <select value={form.role} onChange={e => set('role', e.target.value)}
               className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50">
               {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -443,7 +448,7 @@ function UserFormModal({ user, onClose, onSaved, onError }: {
           </div>
           {!user && (
             <div>
-              <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Пароль</label>
+              <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Пароль</label>
               <div className="relative">
                 <input type={showPwd ? 'text' : 'password'} value={form.password}
                   onChange={e => set('password', e.target.value)} required minLength={8}
@@ -462,7 +467,7 @@ function UserFormModal({ user, onClose, onSaved, onError }: {
               Отмена
             </button>
             <button type="submit" disabled={saving}
-              className="px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#c49838] disabled:opacity-50">
+              className="px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#e0b84d] disabled:opacity-50">
               {saving ? 'Сохранение...' : 'Сохранить'}
             </button>
           </div>
@@ -473,6 +478,89 @@ function UserFormModal({ user, onClose, onSaved, onError }: {
 }
 
 // ─── Profile Tab ──────────────────────────────────────────────────────────────
+
+function AppearanceTab() {
+  const { theme, setTheme } = useThemeStore()
+
+  const options = [
+    {
+      key: 'dark',
+      label: 'Тёмная',
+      desc: 'Классическая тёмная тема — меньше нагрузки на глаза в ночное время',
+      icon: Moon,
+      preview: ['#0d1017', '#1e2535', '#d4a843'],
+    },
+    {
+      key: 'light',
+      label: 'Светлая',
+      desc: 'Светлая тема — удобна при ярком освещении',
+      icon: Sun,
+      preview: ['#ffffff', '#e2e8f0', '#d4a843'],
+    },
+  ] as const
+
+  return (
+    <div className="max-w-xl space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-white mb-1">Тема интерфейса</h2>
+        <p className="text-xs text-[#6b7280]">Выбор сохраняется в браузере и применяется сразу</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {options.map(opt => {
+          const Icon = opt.icon
+          const active = theme === opt.key
+          return (
+            <button
+              key={opt.key}
+              onClick={() => setTheme(opt.key)}
+              className={clsx(
+                'text-left rounded-xl border-2 p-4 transition-all',
+                active
+                  ? 'border-[#d4a843] bg-[#d4a843]/5'
+                  : 'border-[#1e2535] hover:border-[#374151]'
+              )}
+            >
+              {/* Превью */}
+              <div
+                className="w-full h-20 rounded-lg mb-3 overflow-hidden flex border border-[#1e2535]"
+                style={{ backgroundColor: opt.preview[0] }}
+              >
+                <div className="w-1/4 h-full" style={{ backgroundColor: opt.preview[1] }} />
+                <div className="flex-1 p-2 space-y-1.5">
+                  <div className="h-2 rounded" style={{ backgroundColor: opt.preview[1], width: '70%' }} />
+                  <div className="h-2 rounded" style={{ backgroundColor: opt.preview[1], width: '50%' }} />
+                  <div className="h-2 rounded mt-2" style={{ backgroundColor: opt.preview[2], width: '40%' }} />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Icon className="w-4 h-4 text-[#6b7280]" />
+                  <span className="text-sm font-semibold text-white">{opt.label}</span>
+                </div>
+                {active && (
+                  <div className="w-4 h-4 rounded-full bg-[#d4a843] flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#0d1017]" />
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-[#6b7280] mt-1 leading-relaxed">{opt.desc}</p>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="bg-[#0d1017] border border-[#1e2535] rounded-xl p-4">
+        <p className="text-xs text-[#6b7280]">
+          Тема применяется мгновенно без перезагрузки страницы. Кнопку быстрого переключения
+          <span className="text-[#d4a843] mx-1">☀ / ☾</span>
+          также можно найти в верхней панели рядом с уведомлениями.
+        </p>
+      </div>
+    </div>
+  )
+}
 
 function ProfileTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
   const { user, setAuth, token } = useAuthStore()
@@ -510,7 +598,7 @@ function ProfileTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
 
   const PwdInput = ({ label, k, show: showIt, onToggle }: { label: string; k: keyof typeof pwd; show: boolean; onToggle: () => void }) => (
     <div>
-      <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">{label}</label>
+      <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">{label}</label>
       <div className="relative">
         <input type={showIt ? 'text' : 'password'} value={pwd[k]}
           onChange={e => setPwd(p => ({ ...p, [k]: e.target.value }))}
@@ -529,23 +617,23 @@ function ProfileTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
       <Section title="Личные данные" icon={User}>
         <form onSubmit={saveProfile} className="space-y-4">
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">ФИО</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">ФИО</label>
             <input value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))}
               className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50" />
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Email</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Email</label>
             <input type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))}
               className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50" />
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Роль</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Роль</label>
             <p className="text-sm text-white bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2">
               {ROLES[user?.role || ''] || user?.role}
             </p>
           </div>
           <button type="submit" disabled={savingProfile}
-            className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#c49838] disabled:opacity-50">
+            className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#e0b84d] disabled:opacity-50">
             <Save className="w-4 h-4" />
             {savingProfile ? 'Сохранение...' : 'Сохранить'}
           </button>
@@ -562,7 +650,7 @@ function ProfileTab({ show }: { show: (msg: string, ok?: boolean) => void }) {
             <p className="text-xs text-red-400">Пароли не совпадают</p>
           )}
           <button type="submit" disabled={savingPwd}
-            className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#c49838] disabled:opacity-50">
+            className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#e0b84d] disabled:opacity-50">
             <Save className="w-4 h-4" />
             {savingPwd ? 'Изменение...' : 'Изменить пароль'}
           </button>

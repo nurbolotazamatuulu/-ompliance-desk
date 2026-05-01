@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ToastContainer } from './components/Toast'
 import { useAuthStore } from './store/authStore'
 import Login from './pages/Login'
 import Layout from './components/Layout'
@@ -14,6 +15,8 @@ import Transactions from './pages/Transactions'
 import Regulations from './pages/Regulations'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import HighRiskCountries from './pages/HighRiskCountries'
+import Archive from './pages/Archive'
 
 // Защищённый роут — если не авторизован, редиректит на /login
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -37,6 +40,7 @@ function ComingSoon({ title }: { title: string }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route path="/login" element={<Login />} />
 
@@ -67,7 +71,9 @@ export default function App() {
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />
           <Route path="regulations" element={<Regulations />} />
+          <Route path="high-risk-countries" element={<HighRiskCountries />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="archive" element={<Archive />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

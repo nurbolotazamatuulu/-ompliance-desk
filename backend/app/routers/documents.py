@@ -1,8 +1,11 @@
 """Трекер документов клиентов — статусы, сроки, дедлайны."""
 
+import os
+import shutil
 from datetime import datetime, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -11,6 +14,8 @@ from app import models
 from app.auth import get_current_user
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
+
+UPLOADS_ROOT = "/app/uploads"
 
 
 # ─── Справочник типов документов ─────────────────────────────────────────────
@@ -73,6 +78,7 @@ class DocOut(BaseModel):
     received_at:   Optional[datetime]
     days_until_expiry: Optional[int]
     notes:         Optional[str]
+    file_name:     Optional[str]
     updated_at:    Optional[datetime]
 
     model_config = {"from_attributes": True}
@@ -93,6 +99,7 @@ def _days_until(dt: Optional[datetime]) -> Optional[int]:
 
 def _to_out(doc: models.ClientDocument, client_id: int, doc_type: str) -> DocOut:
     meta = DOC_TYPE_MAP.get(doc_type, {"label": doc_type, "has_expiry": False})
+    file_name = os.path.basename(doc.file_path) if doc.file_path else None
     return DocOut(
         id=doc.id,
         client_id=client_id,
@@ -105,6 +112,7 @@ def _to_out(doc: models.ClientDocument, client_id: int, doc_type: str) -> DocOut
         received_at=doc.received_at,
         days_until_expiry=_days_until(doc.expires_at),
         notes=doc.notes,
+        file_name=file_name,
         updated_at=doc.updated_at,
     )
 
@@ -273,9 +281,10 @@ def list_all_docs(
                 if not (0 <= base.days_until_expiry <= expiring_days):
                     continue
 
+            base_data = base.model_dump()
+            base_data['status'] = effective_status
             result.append(DocListItem(
-                **base.model_dump(),
-                status=effective_status,
+                **base_data,
                 client_name=name,
                 client_type=client.client_type.value,
             ))
@@ -292,3 +301,118 @@ def list_all_docs(
 
     result.sort(key=sort_key)
     return result
+
+
+# ─── Загрузка файла ───────────────────────────────────────────────────────────
+
+def _upload_dir(company_id: int, client_id: int) -> str:
+    path = os.path.join(UPLOADS_ROOT, str(company_id), str(client_id))
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _safe_ext(filename: str) -> str:
+    allowed = {".pdf"}
+    _, ext = os.path.splitext(filename.lower())
+    return ext if ext in allowed else ""
+
+
+@router.post("/client/{client_id}/upload/{doc_type}", response_model=DocOut)
+def upload_file(
+    client_id: int,
+    doc_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    client = db.query(models.Client).filter(
+        models.Client.id == client_id,
+        models.Client.company_id == current_user.company_id,
+    ).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+
+    ext = _safe_ext(file.filename or "")
+    if not ext:
+        raise HTTPException(status_code=400, detail="Недопустимый тип файла")
+
+    upload_dir = _upload_dir(current_user.company_id, client_id)
+    # один файл на тип документа — перезаписываем
+    dest = os.path.join(upload_dir, f"{doc_type}{ext}")
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    doc = db.query(models.ClientDocument).filter(
+        models.ClientDocument.client_id == client_id,
+        models.ClientDocument.document_type == doc_type,
+    ).first()
+
+    if doc is None:
+        doc = models.ClientDocument(client_id=client_id, document_type=doc_type)
+        db.add(doc)
+
+    doc.file_path = dest
+    if doc.status == models.DocumentStatus.MISSING:
+        doc.status = models.DocumentStatus.PRESENT
+
+    db.commit()
+    db.refresh(doc)
+    return _to_out(doc, client_id, doc_type)
+
+
+@router.get("/client/{client_id}/file/{doc_type}")
+def download_file(
+    client_id: int,
+    doc_type: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    client = db.query(models.Client).filter(
+        models.Client.id == client_id,
+        models.Client.company_id == current_user.company_id,
+    ).first()
+    if not client:
+        raise HTTPException(status_code=404)
+
+    doc = db.query(models.ClientDocument).filter(
+        models.ClientDocument.client_id == client_id,
+        models.ClientDocument.document_type == doc_type,
+    ).first()
+
+    if not doc or not doc.file_path or not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="Файл не найден")
+
+    return FileResponse(
+        doc.file_path,
+        filename=os.path.basename(doc.file_path),
+        media_type="application/octet-stream",
+    )
+
+
+@router.delete("/client/{client_id}/file/{doc_type}", status_code=204)
+def delete_file(
+    client_id: int,
+    doc_type: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    client = db.query(models.Client).filter(
+        models.Client.id == client_id,
+        models.Client.company_id == current_user.company_id,
+    ).first()
+    if not client:
+        raise HTTPException(status_code=404)
+
+    doc = db.query(models.ClientDocument).filter(
+        models.ClientDocument.client_id == client_id,
+        models.ClientDocument.document_type == doc_type,
+    ).first()
+
+    if doc and doc.file_path and os.path.exists(doc.file_path):
+        os.remove(doc.file_path)
+
+    if doc:
+        doc.file_path = None
+        db.commit()
+
+    return None

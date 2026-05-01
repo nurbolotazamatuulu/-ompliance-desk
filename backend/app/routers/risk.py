@@ -26,7 +26,7 @@ CRITERIA_61P = {
     "client": {
         "label": "Факторы клиента",
         "high": [
-            {"id": "H_C_01", "text": "Клиент является ИПДС (иностранное публичное должностное лицо) или членом его семьи", "weight": 3},
+            {"id": "H_C_01", "text": "Клиент является ИПДЛ (иностранное публичное должностное лицо) или членом его семьи", "weight": 3},
             {"id": "H_C_02", "text": "Клиент является ПДЛ (публичное должностное лицо КР) или связанным с ним лицом", "weight": 2},
             {"id": "H_C_03", "text": "Нерезидент из высокорисковой юрисдикции (FATF grey/black list, санкционная страна)", "weight": 3},
             {"id": "H_C_04", "text": "Клиент уклоняется от идентификации или отказывается предоставлять документы", "weight": 3},
@@ -320,7 +320,7 @@ def compute_risk_vasp(scores: dict) -> dict:
             if cid == "A3" and scores.get("A3_pep"):
                 v = min(v + A3_PEP_BONUS, a3_max)
             vals.append(v)
-        return sum(vals) / len(vals)
+        return sum(vals) / len(vals) if vals else 0.0
 
     a_avg = avg(["A1", "A2", "A3", "A4"])
     b_avg = avg(["B1", "B2", "B3", "B4"])

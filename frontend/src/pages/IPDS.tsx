@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react'
-import { Banknote, Plus, Check, X, Trash2, Edit2, ChevronRight, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Banknote, Plus, X, Trash2, Edit2, ChevronRight, AlertTriangle, ShieldCheck, Search, SlidersHorizontal } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import api from '../api/client'
 import clsx from 'clsx'
+import ConfirmDialog from '../components/ConfirmDialog'
+import { toast } from '../components/Toast'
+import { useSortable } from '../hooks/useSortable'
+import SortTh from '../components/SortTh'
+import StatCard from '../components/StatCard'
+import EmptyState from '../components/EmptyState'
+import { fmtDate, toDateInput } from '../utils/dates'
 
 // ─── Типы ─────────────────────────────────────────────────────────────────────
 
@@ -58,10 +65,6 @@ function fmt(n: number, cur: string) {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(n) + ' ' + cur
 }
 
-function fmtDate(s?: string) {
-  if (!s) return '—'
-  return new Date(s).toLocaleDateString('ru-RU')
-}
 
 // ─── Компонент карточки клиента (покрытие) ────────────────────────────────────
 
@@ -83,7 +86,7 @@ function CoverageCard({ cov }: { cov: ClientCoverage }) {
       <div className="space-y-2">
         {/* Покрытие */}
         <div>
-          <div className="flex justify-between text-[10px] text-[#6b7280] mb-1">
+          <div className="flex justify-between text-xs text-[#6b7280] mb-1">
             <span>Верифицировано документов</span>
             <span className="text-[#d4a843]">{cov.doc_count_verified} / {cov.doc_count}</span>
           </div>
@@ -99,14 +102,14 @@ function CoverageCard({ cov }: { cov: ClientCoverage }) {
         {hasDocs && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {Object.entries(cov.by_currency).map(([cur, amt]) => (
-              <span key={cur} className="text-[10px] bg-[#1e2535] text-[#d1d5db] px-2 py-0.5 rounded">
+              <span key={cur} className="text-xs bg-[#1e2535] text-[#d1d5db] px-2 py-0.5 rounded">
                 {fmt(amt, cur)}
               </span>
             ))}
           </div>
         )}
         {!hasDocs && (
-          <p className="text-[10px] text-[#4b5563]">Нет документов ИПДС</p>
+          <p className="text-xs text-[#4b5563]">Нет документов ИПДС</p>
         )}
       </div>
     </Link>
@@ -301,7 +304,20 @@ export default function IPDS() {
   const [docs, setDocs] = useState<SOFDoc[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const filterRef = useRef<HTMLDivElement>(null)
   const [showForm, setShowForm] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
   const [editDoc, setEditDoc] = useState<SOFDoc | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
@@ -359,47 +375,71 @@ export default function IPDS() {
       }
       if (editDoc) {
         await api.put(`/sof/${editDoc.id}`, payload)
+        toast('Документ обновлён')
       } else {
         await api.post(`/sof/client/${payload.client_id}`, payload)
+        toast('Документ добавлен')
       }
       setShowForm(false)
       setEditDoc(null)
       await loadAll()
+    } catch {
+      toast('Не удалось сохранить', false)
     } finally {
       setSaving(false)
     }
   }
 
   const handleVerify = async (id: number) => {
-    await api.patch(`/sof/${id}/verify`)
-    await loadAll()
+    try {
+      await api.patch(`/sof/${id}/verify`)
+      toast('Документ верифицирован')
+      await loadAll()
+    } catch {
+      toast('Ошибка верификации', false)
+    }
   }
 
   const handleReject = async (id: number) => {
-    await api.patch(`/sof/${id}/reject`)
-    await loadAll()
+    try {
+      await api.patch(`/sof/${id}/reject`)
+      toast('Документ отклонён')
+      await loadAll()
+    } catch {
+      toast('Ошибка отклонения', false)
+    }
   }
 
   const handleDelete = async (id: number) => {
-    await api.delete(`/sof/${id}`)
-    setDeleteId(null)
-    setDocs(p => p.filter(d => d.id !== id))
-    setCoverages(prev => prev.map(c => ({
-      ...c,
-      doc_count: Math.max(0, c.doc_count - 1),
-    })))
+    try {
+      await api.delete(`/sof/${id}`)
+      setDeleteId(null)
+      setDocs(p => p.filter(d => d.id !== id))
+      setCoverages(prev => prev.map(c => ({
+        ...c,
+        doc_count: Math.max(0, c.doc_count - 1),
+      })))
+      toast('Документ удалён')
+    } catch {
+      toast('Не удалось удалить', false)
+      setDeleteId(null)
+    }
   }
 
-  const filteredDocs = docs.filter(d => {
-    const q = search.toLowerCase()
-    const cl = clients.find(c => c.id === d.client_id)?.display_name ?? ''
-    return (
-      cl.toLowerCase().includes(q) ||
-      d.doc_type_label.toLowerCase().includes(q) ||
-      (d.description ?? '').toLowerCase().includes(q) ||
-      (d.document_number ?? '').toLowerCase().includes(q)
-    )
-  })
+  const filteredDocs = docs
+    .map(d => ({ ...d, client_name: clients.find(c => c.id === d.client_id)?.display_name ?? '' }))
+    .filter(d => {
+      const q = search.toLowerCase()
+      const matchSearch =
+        d.client_name.toLowerCase().includes(q) ||
+        d.doc_type_label.toLowerCase().includes(q) ||
+        (d.description ?? '').toLowerCase().includes(q) ||
+        (d.document_number ?? '').toLowerCase().includes(q)
+      const matchStatus = filterStatus ? d.status === filterStatus : true
+      return matchSearch && matchStatus
+    })
+
+  const { sorted: sortedDocs, sortKey: docSortKey, sortDir: docSortDir, toggle: toggleDocSort } = useSortable(filteredDocs, 'client_name')
 
   const filteredCovs = coverages.filter(c =>
     c.client_name.toLowerCase().includes(search.toLowerCase())
@@ -413,60 +453,97 @@ export default function IPDS() {
   return (
     <div className="p-6 space-y-5">
       {/* Заголовок */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Banknote className="w-6 h-6 text-[#d4a843]" />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <Banknote className="w-6 h-6 text-[#d4a843] flex-shrink-0" />
           <div>
             <h1 className="text-xl font-bold text-white">ИПДС — Источники средств</h1>
-            <p className="text-xs text-[#6b7280]">Учёт документов происхождения денежных средств и покрытие операций</p>
+            <p className="text-xs text-[#6b7280] mt-0.5">{docs.length} документов</p>
           </div>
         </div>
-        <button
-          onClick={() => { setEditDoc(null); setShowForm(true) }}
-          className="flex items-center gap-2 bg-[#d4a843] hover:bg-[#e0b84d] text-[#0a0d14] font-bold px-4 py-2.5 rounded-lg text-sm uppercase tracking-wider transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Добавить документ
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className={clsx('transition-all duration-200 overflow-hidden', searchOpen || search ? 'w-56 opacity-100' : 'w-0 opacity-0')}>
+            <div className="relative">
+              <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
+                onBlur={() => { if (!search) setSearchOpen(false) }}
+                placeholder="Поиск..."
+                className="w-full bg-[#111520] border border-[#1e2535] rounded-lg pl-3 pr-8 py-2 text-white text-sm focus:outline-none focus:border-[#d4a843]/50 placeholder-[#374151]" />
+              {search && (
+                <button onClick={() => { setSearch(''); setSearchOpen(false) }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#4b5563] hover:text-white transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+          <button onClick={() => { setSearchOpen(v => !v); if (!searchOpen) setTimeout(() => searchRef.current?.focus(), 50) }}
+            className={clsx('p-2 rounded-lg border transition-colors', searchOpen || search ? 'border-[#d4a843]/40 text-[#d4a843] bg-[#d4a843]/5' : 'border-[#1e2535] text-[#4b5563] hover:text-white hover:border-[#374151]')}>
+            <Search className="w-4 h-4" />
+          </button>
+          <div ref={filterRef} className="relative">
+            <button onClick={() => setFilterOpen(v => !v)}
+              className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors',
+                filterOpen || filterStatus ? 'border-[#d4a843]/40 text-[#d4a843] bg-[#d4a843]/5' : 'border-[#1e2535] text-[#6b7280] hover:text-white hover:border-[#374151]')}>
+              <SlidersHorizontal className="w-4 h-4" />
+              <span>Фильтры</span>
+              {filterStatus && <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-[#d4a843] text-[#0a0d14] text-[10px] font-bold px-1">1</span>}
+            </button>
+            {filterOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-[#111520] border border-[#1e2535] rounded-xl shadow-2xl z-30 p-3 space-y-2">
+                <div>
+                  <label className="block text-xs text-[#4b5563] mb-1">Статус</label>
+                  <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                    className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4a843]/50">
+                    <option value="">Все</option>
+                    <option value="submitted">На проверке</option>
+                    <option value="verified">Верифицирован</option>
+                    <option value="rejected">Отклонён</option>
+                  </select>
+                </div>
+                {filterStatus && (
+                  <button onClick={() => setFilterStatus('')}
+                    className="w-full text-xs text-[#6b7280] hover:text-white border border-[#1e2535] hover:border-[#374151] rounded-lg py-1.5 transition-colors">
+                    Сбросить
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <button onClick={() => { setEditDoc(null); setShowForm(true) }} className="btn-primary flex-shrink-0">
+            <Plus className="w-4 h-4" />
+            Добавить документ
+          </button>
+        </div>
       </div>
+      {(search || filterStatus) && (
+        <div className="flex flex-wrap gap-1.5">
+          {search && <span className="inline-flex items-center gap-1 text-xs bg-[#d4a843]/10 border border-[#d4a843]/20 text-[#d4a843] px-2 py-1 rounded-full">
+            Поиск: {search}<button onClick={() => setSearch('')} className="hover:text-white"><X className="w-3 h-3" /></button>
+          </span>}
+          {filterStatus && <span className="inline-flex items-center gap-1 text-xs bg-[#d4a843]/10 border border-[#d4a843]/20 text-[#d4a843] px-2 py-1 rounded-full">
+            {filterStatus === 'submitted' ? 'На проверке' : filterStatus === 'verified' ? 'Верифицирован' : 'Отклонён'}
+            <button onClick={() => setFilterStatus('')} className="hover:text-white"><X className="w-3 h-3" /></button>
+          </span>}
+        </div>
+      )}
 
       {/* Статистика */}
       <div className="grid grid-cols-4 gap-3">
-        {[
-          { label: 'Всего документов', value: totalDocs, color: 'text-white' },
-          { label: 'Верифицировано', value: totalVerified, color: 'text-green-400' },
-          { label: 'Ожидают проверки', value: needsVerification, color: 'text-yellow-400' },
-          { label: 'Клиентов с ИПДС', value: clientsWithDocs, color: 'text-[#d4a843]' },
-        ].map(s => (
-          <div key={s.label} className="bg-[#0d1017] border border-[#1e2535] rounded-xl p-4">
-            <p className={clsx('text-2xl font-bold', s.color)}>{s.value}</p>
-            <p className="text-xs text-[#6b7280] mt-0.5">{s.label}</p>
-          </div>
-        ))}
+        <StatCard label="Всего документов"  value={totalDocs}           color="text-white" />
+        <StatCard label="Верифицировано"    value={totalVerified}       color="text-green-400"  border="border-green-400/20" />
+        <StatCard label="Ожидают проверки"  value={needsVerification}   color="text-yellow-400" border="border-yellow-400/20" />
+        <StatCard label="Клиентов с ИПДС"   value={clientsWithDocs}     color="text-[#d4a843]"  border="border-[#d4a843]/20" />
       </div>
 
-      {/* Переключатель + поиск */}
-      <div className="flex items-center gap-3">
-        <div className="flex gap-1 bg-[#111520] border border-[#1e2535] rounded-lg p-1">
-          {(['overview', 'list'] as const).map(v => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={clsx(
-                'px-4 py-1.5 rounded-md text-xs font-medium transition-colors',
-                view === v ? 'bg-[#d4a843] text-[#0a0d14]' : 'text-[#6b7280] hover:text-white'
-              )}
-            >
-              {v === 'overview' ? 'По клиентам' : 'Все документы'}
-            </button>
-          ))}
-        </div>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Поиск..."
-          className="flex-1 bg-[#111520] border border-[#1e2535] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50 placeholder-[#374151]"
-        />
+      {/* Переключатель вида */}
+      <div className="flex gap-1 bg-[#111520] border border-[#1e2535] rounded-lg p-1 w-fit">
+        {(['overview', 'list'] as const).map(v => (
+          <button key={v} onClick={() => setView(v)}
+            className={clsx('px-4 py-1.5 rounded-md text-xs font-medium transition-colors',
+              view === v ? 'bg-[#d4a843] text-[#0a0d14]' : 'text-[#6b7280] hover:text-white')}>
+            {v === 'overview' ? 'По клиентам' : 'Все документы'}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -475,10 +552,8 @@ export default function IPDS() {
         /* ── Обзор по клиентам ── */
         <div>
           {filteredCovs.filter(c => c.doc_count > 0).length === 0 ? (
-            <div className="text-center py-16 text-[#4b5563]">
-              <Banknote className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p>Нет документов ИПДС</p>
-            </div>
+            <EmptyState icon={Banknote} title={search ? 'Клиентов не найдено' : 'Нет документов ИПДС'}
+              action={!search ? { label: '+ Добавить первый документ', onClick: () => { setEditDoc(null); setShowForm(true) } } : undefined} />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredCovs.filter(c => c.doc_count > 0).map(c => (
@@ -491,25 +566,22 @@ export default function IPDS() {
         /* ── Список всех документов ── */
         <div className="bg-[#0d1017] border border-[#1e2535] rounded-xl overflow-hidden">
           {filteredDocs.length === 0 ? (
-            <div className="text-center py-16 text-[#4b5563]">
-              <Banknote className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p>Документов не найдено</p>
-            </div>
+            <EmptyState icon={Banknote} title="Документов не найдено" />
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#1e2535] text-[10px] uppercase tracking-widest text-[#4b5563]">
-                  <th className="text-left px-4 py-3">Клиент</th>
-                  <th className="text-left px-4 py-3">Тип документа</th>
-                  <th className="text-left px-4 py-3">Описание</th>
-                  <th className="text-right px-4 py-3">Сумма</th>
-                  <th className="text-left px-4 py-3">Период</th>
-                  <th className="text-left px-4 py-3">Статус</th>
+                <tr className="border-b border-[#1e2535] bg-[#0d1017]">
+                  <SortTh label="Клиент"        field="client_name"   current={String(docSortKey)} dir={docSortDir} onSort={toggleDocSort} className="px-4 py-3" />
+                  <SortTh label="Тип документа" field="doc_type_label" current={String(docSortKey)} dir={docSortDir} onSort={toggleDocSort} className="px-4 py-3" />
+                  <SortTh label="Описание"      field="description"   current={String(docSortKey)} dir={docSortDir} onSort={toggleDocSort} className="px-4 py-3" />
+                  <SortTh label="Сумма"         field="amount"        current={String(docSortKey)} dir={docSortDir} onSort={toggleDocSort} className="px-4 py-3 text-right" />
+                  <SortTh label="Период"        field="period_from"   current={String(docSortKey)} dir={docSortDir} onSort={toggleDocSort} className="px-4 py-3" />
+                  <SortTh label="Статус"        field="status"        current={String(docSortKey)} dir={docSortDir} onSort={toggleDocSort} className="px-4 py-3" />
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
-                {filteredDocs.map(d => {
+                {sortedDocs.map(d => {
                   const cl = clients.find(c => c.id === d.client_id)
                   const sc = STATUS_CONF[d.status]
                   return (
@@ -536,7 +608,7 @@ export default function IPDS() {
                           : fmtDate(d.document_date)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium', sc.color)}>
+                        <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', sc.color)}>
                           {sc.label}
                         </span>
                       </td>
@@ -566,23 +638,12 @@ export default function IPDS() {
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          {deleteId === d.id ? (
-                            <>
-                              <button onClick={() => handleDelete(d.id)} className="p-1.5 text-red-400 hover:text-red-300 rounded">
-                                <Check className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => setDeleteId(null)} className="p-1.5 text-[#4b5563] hover:text-white rounded">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteId(d.id)}
-                              className="p-1.5 text-[#4b5563] hover:text-red-400 transition-colors rounded"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => setDeleteId(d.id)}
+                            className="p-1.5 text-[#4b5563] hover:text-red-400 transition-colors rounded"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -593,6 +654,14 @@ export default function IPDS() {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        title="Удалить документ"
+        message={`Удалить документ ИПДС? Это действие необратимо.`}
+        onConfirm={() => deleteId !== null && handleDelete(deleteId)}
+        onCancel={() => setDeleteId(null)}
+      />
 
       {/* Форма */}
       {showForm && (
@@ -605,11 +674,11 @@ export default function IPDS() {
             doc_type: editDoc.doc_type,
             description: editDoc.description ?? '',
             document_number: editDoc.document_number ?? '',
-            document_date: editDoc.document_date ? editDoc.document_date.split('T')[0] : '',
+            document_date: toDateInput(editDoc.document_date),
             amount: String(editDoc.amount),
             currency: editDoc.currency,
-            period_from: editDoc.period_from ? editDoc.period_from.split('T')[0] : '',
-            period_to: editDoc.period_to ? editDoc.period_to.split('T')[0] : '',
+            period_from: toDateInput(editDoc.period_from),
+            period_to: toDateInput(editDoc.period_to),
             notes: editDoc.notes ?? '',
           } : { ...EMPTY_FORM }}
           onSave={handleSave}

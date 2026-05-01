@@ -4,11 +4,12 @@ from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app.database import get_db
 from app import models
 from app.auth import get_current_user
+from app.license import check_write_permission
 
 router = APIRouter(prefix="/api", tags=["ubos-pep"])
 
@@ -29,17 +30,70 @@ def _client_display_name(client: models.Client) -> str:
 
 # ─── Схемы УБО ────────────────────────────────────────────────────────────────
 
+_UBO_COMMON = {
+    "middle_name": (Optional[str], None),
+    "date_of_birth": (Optional[datetime], None),
+    "place_of_birth": (Optional[str], None),
+    "nationality": (Optional[str], None),
+    "country_of_residence": (Optional[str], None),
+    "pin": (Optional[str], None),
+    "doc_type": (Optional[str], None),
+    "doc_series_number": (Optional[str], None),
+    "doc_issued_by": (Optional[str], None),
+    "doc_issued_at": (Optional[datetime], None),
+    "doc_expires_at": (Optional[datetime], None),
+    "registration_address": (Optional[str], None),
+    "actual_address": (Optional[str], None),
+    "phone": (Optional[str], None),
+    "email": (Optional[str], None),
+    "ownership_percentage": (Optional[float], None),
+    "control_type": (Optional[str], None),
+    "recognition_basis": (Optional[str], None),
+    "ownership_chain": (Optional[str], None),
+    "is_pep": (Optional[bool], None),
+    "source_of_funds": (Optional[str], None),
+    "relationship_purpose": (Optional[str], None),
+    "notes": (Optional[str], None),
+}
+
+
 class UBOCreate(BaseModel):
     client_id: int
     last_name: str
     first_name: str
     middle_name: Optional[str] = None
     date_of_birth: Optional[datetime] = None
+    place_of_birth: Optional[str] = None
     nationality: Optional[str] = None
-    passport_number: Optional[str] = None
-    ownership_percentage: Optional[float] = None
+    country_of_residence: Optional[str] = None
+    pin: Optional[str] = None
+    doc_type: Optional[str] = None
+    doc_series_number: Optional[str] = None
+    doc_issued_by: Optional[str] = None
+    doc_issued_at: Optional[datetime] = None
+    doc_expires_at: Optional[datetime] = None
+    registration_address: Optional[str] = None
+    actual_address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    ownership_percentage: Optional[float] = Field(None, ge=0, le=100)
+    control_type: Optional[str] = None
+    recognition_basis: Optional[str] = None
+    recognition_criteria: Optional[list] = None
     ownership_chain: Optional[str] = None
     is_ultimate: bool = True
+    is_pep: Optional[bool] = None
+    source_of_funds: Optional[str] = None
+    relationship_purpose: Optional[str] = None
+    pdl_position: Optional[str] = None
+    pdl_appointment_date: Optional[datetime] = None
+    pdl_release_date: Optional[datetime] = None
+    pdl_source_of_funds: Optional[str] = None
+    pdl_approval_notes: Optional[str] = None
+    pdl_family_members: Optional[list] = None
+    pdl_close_associates: Optional[list] = None
+    influence_type: Optional[str] = None
+    residency_status: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -48,11 +102,37 @@ class UBOUpdate(BaseModel):
     first_name: Optional[str] = None
     middle_name: Optional[str] = None
     date_of_birth: Optional[datetime] = None
+    place_of_birth: Optional[str] = None
     nationality: Optional[str] = None
-    passport_number: Optional[str] = None
+    country_of_residence: Optional[str] = None
+    pin: Optional[str] = None
+    doc_type: Optional[str] = None
+    doc_series_number: Optional[str] = None
+    doc_issued_by: Optional[str] = None
+    doc_issued_at: Optional[datetime] = None
+    doc_expires_at: Optional[datetime] = None
+    registration_address: Optional[str] = None
+    actual_address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
     ownership_percentage: Optional[float] = None
+    control_type: Optional[str] = None
+    recognition_basis: Optional[str] = None
+    recognition_criteria: Optional[list] = None
     ownership_chain: Optional[str] = None
     is_ultimate: Optional[bool] = None
+    is_pep: Optional[bool] = None
+    source_of_funds: Optional[str] = None
+    relationship_purpose: Optional[str] = None
+    pdl_position: Optional[str] = None
+    pdl_appointment_date: Optional[datetime] = None
+    pdl_release_date: Optional[datetime] = None
+    pdl_source_of_funds: Optional[str] = None
+    pdl_approval_notes: Optional[str] = None
+    pdl_family_members: Optional[list] = None
+    pdl_close_associates: Optional[list] = None
+    influence_type: Optional[str] = None
+    residency_status: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -64,11 +144,37 @@ class UBOOut(BaseModel):
     first_name: str
     middle_name: Optional[str]
     date_of_birth: Optional[datetime]
+    place_of_birth: Optional[str]
     nationality: Optional[str]
-    passport_number: Optional[str]
+    country_of_residence: Optional[str]
+    pin: Optional[str]
+    doc_type: Optional[str]
+    doc_series_number: Optional[str]
+    doc_issued_by: Optional[str]
+    doc_issued_at: Optional[datetime]
+    doc_expires_at: Optional[datetime]
+    registration_address: Optional[str]
+    actual_address: Optional[str]
+    phone: Optional[str]
+    email: Optional[str]
     ownership_percentage: Optional[float]
+    control_type: Optional[str]
+    recognition_basis: Optional[str]
+    recognition_criteria: Optional[list]
     ownership_chain: Optional[str]
     is_ultimate: bool
+    is_pep: Optional[bool]
+    source_of_funds: Optional[str]
+    relationship_purpose: Optional[str]
+    pdl_position: Optional[str]
+    pdl_appointment_date: Optional[datetime]
+    pdl_release_date: Optional[datetime]
+    pdl_source_of_funds: Optional[str]
+    pdl_approval_notes: Optional[str]
+    pdl_family_members: Optional[list]
+    pdl_close_associates: Optional[list]
+    influence_type: Optional[str]
+    residency_status: Optional[str]
     notes: Optional[str]
     created_at: datetime
 
@@ -129,6 +235,32 @@ def _get_client(client_id: int, company_id: int, db: Session) -> models.Client:
     return client
 
 
+# ─── Синхронизация УБО-ПДЛ ───────────────────────────────────────────────────
+
+def _sync_ubo_pep(ubo: models.UBO, db: Session) -> None:
+    """Создаёт / обновляет / удаляет запись PEPRecord для УБО с is_pep=True."""
+    existing = db.query(models.PEPRecord).filter(models.PEPRecord.ubo_id == ubo.id).first()
+    if ubo.is_pep:
+        full_name = " ".join(p for p in [ubo.last_name, ubo.first_name, ubo.middle_name] if p)
+        if existing:
+            existing.position = ubo.pdl_position
+            existing.identified_at = ubo.pdl_appointment_date
+            existing.notes = f"БВ: {full_name}"
+        else:
+            db.add(models.PEPRecord(
+                client_id=ubo.client_id,
+                ubo_id=ubo.id,
+                pep_type="PEP",
+                position=ubo.pdl_position,
+                identified_at=ubo.pdl_appointment_date,
+                source="УБО",
+                notes=f"БВ: {full_name}",
+            ))
+    else:
+        if existing:
+            db.delete(existing)
+
+
 # ─── УБО эндпоинты ────────────────────────────────────────────────────────────
 
 @router.get("/ubos", response_model=List[UBOOut])
@@ -140,7 +272,10 @@ def list_ubos(
     q = (
         db.query(models.UBO)
         .join(models.Client, models.UBO.client_id == models.Client.id)
-        .filter(models.Client.company_id == current_user.company_id)
+        .filter(
+            models.Client.company_id == current_user.company_id,
+            models.UBO.is_archived == False,
+        )
     )
     if client_id:
         q = q.filter(models.UBO.client_id == client_id)
@@ -159,9 +294,12 @@ def create_ubo(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    check_write_permission(current_user.company)
     client = _get_client(data.client_id, current_user.company_id, db)
     ubo = models.UBO(**data.model_dump())
     db.add(ubo)
+    db.flush()
+    _sync_ubo_pep(ubo, db)
     db.commit()
     db.refresh(ubo)
     d = {c.key: getattr(ubo, c.key) for c in ubo.__table__.columns}
@@ -195,6 +333,7 @@ def update_ubo(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    check_write_permission(current_user.company)
     ubo = (
         db.query(models.UBO)
         .join(models.Client)
@@ -205,6 +344,7 @@ def update_ubo(
         raise HTTPException(status_code=404, detail="УБО не найден")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(ubo, field, value)
+    _sync_ubo_pep(ubo, db)
     db.commit()
     db.refresh(ubo)
     d = {c.key: getattr(ubo, c.key) for c in ubo.__table__.columns}
@@ -218,6 +358,7 @@ def delete_ubo(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    check_write_permission(current_user.company)
     ubo = (
         db.query(models.UBO)
         .join(models.Client)

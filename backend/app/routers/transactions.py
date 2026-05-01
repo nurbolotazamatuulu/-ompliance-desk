@@ -79,7 +79,7 @@ SUSPICIOUS_INDICATORS = [
     {"code": "40041", "group": "Клиент", "label": "Клиент проявляет нервозность, явно скрывает информацию об операции"},
     {"code": "40042", "group": "Клиент", "label": "Клиент предоставил документы с признаками подделки или несоответствий"},
     {"code": "40043", "group": "Клиент", "label": "Клиент отказывается идентифицировать конечного бенефициара (UBO)"},
-    {"code": "40044", "group": "Клиент", "label": "Клиент является ПДЛ/ИПДС и совершает операции, выходящие за рамки публичной роли"},
+    {"code": "40044", "group": "Клиент", "label": "Клиент является ПДЛ/ИПДЛ и совершает операции, выходящие за рамки публичной роли"},
     {"code": "40045", "group": "Клиент", "label": "Совпадение клиента с данными санкционных списков или информацией о ML/TF"},
     # Группа VI — Организации (40051–40059)
     {"code": "40051", "group": "Организация", "label": "Юрлицо зарегистрировано недавно, операции несопоставимы с уставной деятельностью"},
@@ -136,6 +136,14 @@ class TransactionCreate(BaseModel):
     client_id:           Optional[int]   = None
     amount:              float
     currency:            str             = "KGS"
+
+    from pydantic import field_validator
+    @field_validator('amount')
+    @classmethod
+    def amount_positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError('Сумма должна быть больше нуля')
+        return v
     operation_date:      datetime
     type_code:           Optional[str]   = None
     description:         Optional[str]   = None

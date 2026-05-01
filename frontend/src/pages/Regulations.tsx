@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { fmtDate } from '../utils/dates'
 import {
   BookOpen, Plus, X, ExternalLink, Tag, Search,
   ChevronDown, ChevronUp, Globe, Building2, Edit3, Trash2
@@ -66,6 +67,8 @@ export default function Regulations() {
   const [showForm, setShowForm] = useState(false)
   const [editDoc, setEditDoc] = useState<RegDoc | null>(null)
   const [editNotes, setEditNotes] = useState<{ id: number; notes: string } | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -111,21 +114,38 @@ export default function Regulations() {
     <div className="p-6 space-y-5">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BookOpen className="w-6 h-6 text-[#d4a843]" />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <BookOpen className="w-6 h-6 text-[#d4a843] flex-shrink-0" />
           <div>
             <h1 className="text-xl font-bold text-white">Нормативная база</h1>
-            <p className="text-xs text-[#6b7280]">НПА, международные стандарты и внутренние документы</p>
+            <p className="text-xs text-[#6b7280] mt-0.5">{docs.length} документов</p>
           </div>
         </div>
-        <button
-          onClick={() => { setEditDoc(null); setShowForm(true) }}
-          className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#c49838] transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Добавить документ
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className={clsx('transition-all duration-200 overflow-hidden', searchOpen || search ? 'w-64 opacity-100' : 'w-0 opacity-0')}>
+            <div className="relative">
+              <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
+                onBlur={() => { if (!search) setSearchOpen(false) }}
+                placeholder="Название, номер, тег..."
+                className="w-full bg-[#111520] border border-[#1e2535] rounded-lg pl-3 pr-8 py-2 text-white text-sm focus:outline-none focus:border-[#d4a843]/50 placeholder-[#374151]" />
+              {search && (
+                <button onClick={() => { setSearch(''); setSearchOpen(false) }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#4b5563] hover:text-white transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+          <button onClick={() => { setSearchOpen(v => !v); if (!searchOpen) setTimeout(() => searchRef.current?.focus(), 50) }}
+            className={clsx('p-2 rounded-lg border transition-colors', searchOpen || search ? 'border-[#d4a843]/40 text-[#d4a843] bg-[#d4a843]/5' : 'border-[#1e2535] text-[#4b5563] hover:text-white hover:border-[#374151]')}>
+            <Search className="w-4 h-4" />
+          </button>
+          <button onClick={() => { setEditDoc(null); setShowForm(true) }} className="btn-primary flex-shrink-0">
+            <Plus className="w-4 h-4" />
+            Добавить документ
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -143,34 +163,16 @@ export default function Regulations() {
         ))}
       </div>
 
-      {/* Filters + Search */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-1 bg-[#111520] border border-[#1e2535] rounded-lg p-1 flex-wrap">
-          {CATEGORIES.map(c => (
-            <button
-              key={c.key}
-              onClick={() => setCategory(c.key)}
-              className={clsx(
-                'px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap',
-                category === c.key ? 'bg-[#d4a843] text-[#0a0d14]' : 'text-[#6b7280] hover:text-white'
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#374151]" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Поиск по названию, номеру, тегу..."
-            className="w-full bg-[#111520] border border-[#1e2535] rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50 placeholder-[#374151]"
-          />
-        </div>
+      {/* Категории */}
+      <div className="flex gap-1 bg-[#111520] border border-[#1e2535] rounded-lg p-1 flex-wrap w-fit">
+        {CATEGORIES.map(c => (
+          <button key={c.key} onClick={() => setCategory(c.key)}
+            className={clsx('px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap',
+              category === c.key ? 'bg-[#d4a843] text-[#0a0d14]' : 'text-[#6b7280] hover:text-white')}>
+            {c.label}
+          </button>
+        ))}
       </div>
-
-      <p className="text-xs text-[#4b5563]">{loading ? 'Загрузка...' : `${docs.length} документов`}</p>
 
       {/* Document list */}
       {!loading && (
@@ -181,10 +183,10 @@ export default function Regulations() {
               return (
                 <div key={cat}>
                   <div className="flex items-center gap-2 mb-3">
-                    <span className={clsx('text-[10px] font-semibold px-2 py-1 rounded-full', conf.color)}>
+                    <span className={clsx('text-xs font-semibold px-2 py-1 rounded-full', conf.color)}>
                       {conf.label}
                     </span>
-                    <span className="text-[10px] text-[#4b5563]">{items.length} документов</span>
+                    <span className="text-xs text-[#4b5563]">{items.length} документов</span>
                   </div>
                   <div className="space-y-2">
                     {items.map(doc => (
@@ -282,28 +284,28 @@ function DocCard({ doc, expanded, onToggle, onEditNotes, onDelete, editNotes, on
         {/* Center: title + meta */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2 flex-wrap">
-            <span className={clsx('text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0', catConf.color)}>
+            <span className={clsx('text-xs font-medium px-2 py-0.5 rounded-full shrink-0', catConf.color)}>
               {catConf.label}
             </span>
-            <span className={clsx('text-[10px] px-2 py-0.5 rounded-full shrink-0', statusConf.color)}>
+            <span className={clsx('text-xs px-2 py-0.5 rounded-full shrink-0', statusConf.color)}>
               {statusConf.label}
             </span>
             {doc.number && (
-              <span className="text-[10px] font-mono text-[#6b7280]">{doc.number}</span>
+              <span className="text-xs font-mono text-[#6b7280]">{doc.number}</span>
             )}
           </div>
           <p className="text-sm font-semibold text-white mt-1.5 leading-snug">
             {doc.short_title || doc.title}
           </p>
           {doc.short_title && (
-            <p className="text-[11px] text-[#6b7280] mt-0.5 line-clamp-1">{doc.title}</p>
+            <p className="text-xs text-[#6b7280] mt-0.5 line-clamp-1">{doc.title}</p>
           )}
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {doc.issued_by && (
-              <span className="text-[10px] text-[#4b5563]">{doc.issued_by}</span>
+              <span className="text-xs text-[#4b5563]">{doc.issued_by}</span>
             )}
             {doc.issued_at && (
-              <span className="text-[10px] text-[#4b5563]">
+              <span className="text-xs text-[#4b5563]">
                 {new Date(doc.issued_at).getFullYear()}
               </span>
             )}
@@ -320,7 +322,7 @@ function DocCard({ doc, expanded, onToggle, onEditNotes, onDelete, editNotes, on
               </div>
             )}
             {doc.notes && (
-              <span className="text-[10px] bg-[#d4a843]/10 text-[#d4a843] px-1.5 py-0.5 rounded">
+              <span className="text-xs bg-[#d4a843]/10 text-[#d4a843] px-1.5 py-0.5 rounded">
                 Аннотация
               </span>
             )}
@@ -354,7 +356,7 @@ function DocCard({ doc, expanded, onToggle, onEditNotes, onDelete, editNotes, on
           {/* Description */}
           {doc.description && (
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1.5">Краткое содержание</p>
+              <p className="text-xs uppercase tracking-wider text-[#4b5563] mb-1.5">Краткое содержание</p>
               <p className="text-sm text-[#9ca3af] leading-relaxed">{doc.description}</p>
             </div>
           )}
@@ -363,20 +365,20 @@ function DocCard({ doc, expanded, onToggle, onEditNotes, onDelete, editNotes, on
           <div className="grid grid-cols-3 gap-4 text-xs">
             {doc.issued_at && (
               <div>
-                <p className="text-[10px] text-[#4b5563]">Дата издания</p>
-                <p className="text-white mt-0.5">{new Date(doc.issued_at).toLocaleDateString('ru-RU')}</p>
+                <p className="text-xs text-[#4b5563]">Дата издания</p>
+                <p className="text-white mt-0.5">{fmtDate(doc.issued_at)}</p>
               </div>
             )}
             {doc.effective_from && (
               <div>
-                <p className="text-[10px] text-[#4b5563]">Вступил в силу</p>
-                <p className="text-white mt-0.5">{new Date(doc.effective_from).toLocaleDateString('ru-RU')}</p>
+                <p className="text-xs text-[#4b5563]">Вступил в силу</p>
+                <p className="text-white mt-0.5">{fmtDate(doc.effective_from)}</p>
               </div>
             )}
             {doc.effective_to && (
               <div>
-                <p className="text-[10px] text-[#4b5563]">Утратил силу</p>
-                <p className="text-red-400 mt-0.5">{new Date(doc.effective_to).toLocaleDateString('ru-RU')}</p>
+                <p className="text-xs text-[#4b5563]">Утратил силу</p>
+                <p className="text-red-400 mt-0.5">{fmtDate(doc.effective_to)}</p>
               </div>
             )}
           </div>
@@ -386,7 +388,7 @@ function DocCard({ doc, expanded, onToggle, onEditNotes, onDelete, editNotes, on
             <div className="flex items-center gap-2 flex-wrap">
               <Tag className="w-3 h-3 text-[#4b5563]" />
               {doc.tags.map(t => (
-                <span key={t} className="text-[10px] bg-[#1e2535] text-[#9ca3af] px-2 py-0.5 rounded">
+                <span key={t} className="text-xs bg-[#1e2535] text-[#9ca3af] px-2 py-0.5 rounded">
                   {t}
                 </span>
               ))}
@@ -396,11 +398,11 @@ function DocCard({ doc, expanded, onToggle, onEditNotes, onDelete, editNotes, on
           {/* Notes section */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] uppercase tracking-widest text-[#4b5563]">Аннотация офицера</p>
+              <p className="text-xs uppercase tracking-wider text-[#4b5563]">Аннотация офицера</p>
               {!editNotes && (
                 <button
                   onClick={onEditNotes}
-                  className="flex items-center gap-1 text-[10px] text-[#4b5563] hover:text-[#d4a843] transition-colors"
+                  className="flex items-center gap-1 text-xs text-[#4b5563] hover:text-[#d4a843] transition-colors"
                 >
                   <Edit3 className="w-3 h-3" />
                   Редактировать
@@ -522,7 +524,7 @@ function DocFormModal({ doc, onClose, onSaved }: {
 
   const Field = ({ label, k, type = 'text', placeholder = '' }: { label: string; k: string; type?: string; placeholder?: string }) => (
     <div>
-      <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">{label}</label>
+      <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">{label}</label>
       <input type={type} value={(form as any)[k]} onChange={e => set(k, e.target.value)} placeholder={placeholder}
         className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50" />
     </div>
@@ -538,14 +540,14 @@ function DocFormModal({ doc, onClose, onSaved }: {
         <form onSubmit={submit} className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Категория</label>
+              <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Категория</label>
               <select value={form.category} onChange={e => set('category', e.target.value)}
                 className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50">
                 {CATEGORIES.slice(1).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Статус</label>
+              <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Статус</label>
               <select value={form.status} onChange={e => set('status', e.target.value)}
                 className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50">
                 {Object.entries(STATUS_CONF).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -554,7 +556,7 @@ function DocFormModal({ doc, onClose, onSaved }: {
           </div>
 
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Полное название *</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Полное название *</label>
             <textarea value={form.title} onChange={e => set('title', e.target.value)} required rows={2}
               className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50 resize-none" />
           </div>
@@ -573,7 +575,7 @@ function DocFormModal({ doc, onClose, onSaved }: {
           </div>
 
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Краткое содержание</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Краткое содержание</label>
             <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3}
               className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50 resize-none" />
           </div>
@@ -581,14 +583,14 @@ function DocFormModal({ doc, onClose, onSaved }: {
           <Field label="Ссылка на источник" k="external_url" placeholder="https://..." />
 
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Теги (через запятую)</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Теги (через запятую)</label>
             <input value={form.tags} onChange={e => set('tags', e.target.value)}
               placeholder="ПОД/ФТ, KYC, UBO, FATF"
               className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50" />
           </div>
 
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">Аннотация</label>
+            <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">Аннотация</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3}
               placeholder="Важные выдержки, ссылки на пункты..."
               className="w-full bg-[#0d1017] border border-[#1e2535] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4a843]/50 resize-none" />
@@ -602,7 +604,7 @@ function DocFormModal({ doc, onClose, onSaved }: {
               Отмена
             </button>
             <button type="submit" disabled={saving}
-              className="px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#c49838] disabled:opacity-50">
+              className="px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#e0b84d] disabled:opacity-50">
               {saving ? 'Сохранение...' : doc ? 'Сохранить' : 'Добавить'}
             </button>
           </div>

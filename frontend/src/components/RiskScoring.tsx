@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { fmtDate } from '../utils/dates'
 import {
   Shield, ShieldAlert, ShieldCheck, ShieldX, Save, RotateCcw,
   AlertTriangle, ChevronDown, ChevronUp, CheckSquare, Square,
@@ -110,8 +111,8 @@ function ScorePill({ score, label, small }: { score: number; label: string; smal
         <span className={clsx('font-bold tabular-nums', small ? 'text-sm' : 'text-base', c.color)}>
           {score.toFixed(0)}
         </span>
-        <span className={clsx('text-[10px] ml-1', c.color)}>{c.label}</span>
-        {label && <span className="text-[10px] text-[#4b5563] ml-1">· {label}</span>}
+        <span className={clsx('text-xs ml-1', c.color)}>{c.label}</span>
+        {label && <span className="text-xs text-[#4b5563] ml-1">· {label}</span>}
       </div>
     </div>
   )
@@ -120,7 +121,7 @@ function ScorePill({ score, label, small }: { score: number; label: string; smal
 function BlockBar({ label, pct, color }: { label: string; pct: number; color: string }) {
   return (
     <div className="flex-1 min-w-0">
-      <div className="flex justify-between text-[10px] text-[#6b7280] mb-1">
+      <div className="flex justify-between text-xs text-[#6b7280] mb-1">
         <span>{label}</span>
         <span style={{ color }}>{pct.toFixed(0)}%</span>
       </div>
@@ -144,7 +145,7 @@ function CheckRow({ item, checked, type, onChange }: {
           ? type === 'high'
             ? 'bg-red-500/10 border-red-500/20'
             : 'bg-green-500/10 border-green-500/20'
-          : 'bg-transparent border-transparent hover:bg-[#1a1f2e]'
+          : 'bg-transparent border-transparent hover:bg-[#1e2535]/60'
       )}
     >
       <span className="mt-0.5 shrink-0">
@@ -154,7 +155,7 @@ function CheckRow({ item, checked, type, onChange }: {
         }
       </span>
       <span className="text-xs text-[#d1d5db] leading-relaxed flex-1">{item.text}</span>
-      <span className={clsx('text-[10px] font-bold shrink-0 mt-0.5', type === 'high' ? 'text-red-400' : 'text-green-400')}>
+      <span className={clsx('text-xs font-bold shrink-0 mt-0.5', type === 'high' ? 'text-red-400' : 'text-green-400')}>
         {type === 'high' ? `+${item.weight}` : `-${(item.weight * 0.5).toFixed(1)}`}
       </span>
       {item.override && (
@@ -177,7 +178,7 @@ function SectionHeader({ title, subtitle, score, open, onToggle }: {
       <div className="flex items-center gap-3 text-left">
         <div>
           <p className="font-semibold text-white text-sm">{title}</p>
-          <p className="text-[10px] text-[#4b5563] mt-0.5">{subtitle}</p>
+          <p className="text-xs text-[#4b5563] mt-0.5">{subtitle}</p>
         </div>
       </div>
       <div className="flex items-center gap-3">
@@ -317,8 +318,8 @@ export default function RiskScoring({ clientId, clientType }: {
                 {' / 100'}
               </p>
               {savedState?.scored_at && (
-                <p className="text-[10px] text-[#4b5563] mt-0.5">
-                  Последняя оценка: {new Date(savedState.scored_at).toLocaleDateString('ru-RU')}
+                <p className="text-xs text-[#4b5563] mt-0.5">
+                  Последняя оценка: {fmtDate(savedState.scored_at)}
                 </p>
               )}
             </div>
@@ -331,7 +332,7 @@ export default function RiskScoring({ clientId, clientType }: {
         {/* Мини-шкалы двух моделей */}
         <div className="mt-4 flex gap-4 flex-wrap">
           <div className="flex-1 min-w-[140px]">
-            <p className="text-[10px] text-[#6b7280] mb-1">61/п базовая оценка</p>
+            <p className="text-xs text-[#6b7280] mb-1">61/п базовая оценка</p>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-1.5 bg-[#1e2535] rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-500"
@@ -344,7 +345,7 @@ export default function RiskScoring({ clientId, clientType }: {
           </div>
           {calc.rVasp && (
             <div className="flex-1 min-w-[140px]">
-              <p className="text-[10px] text-[#6b7280] mb-1">VASP расширенная оценка</p>
+              <p className="text-xs text-[#6b7280] mb-1">VASP расширенная оценка</p>
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-1.5 bg-[#1e2535] rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-500"
@@ -361,14 +362,14 @@ export default function RiskScoring({ clientId, clientType }: {
         {/* Override-предупреждения */}
         {(calc.r61p.overrides.length > 0 || (calc.rVasp?.overrides.length ?? 0) > 0) && (
           <div className="mt-3 pt-3 border-t border-red-500/20 space-y-0.5">
-            <p className="text-[10px] text-red-400 font-semibold flex items-center gap-1">
+            <p className="text-xs text-red-400 font-semibold flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" /> Авто-триггеры КРИТИЧЕСКОГО уровня:
             </p>
             {calc.r61p.overrides.map(id => (
-              <p key={id} className="text-[10px] text-red-300/70 pl-4">· {id} (61/п)</p>
+              <p key={id} className="text-xs text-red-300/70 pl-4">· {id} (61/п)</p>
             ))}
             {calc.rVasp?.overrides.map(id => (
-              <p key={id} className="text-[10px] text-red-300/70 pl-4">· {id} (VASP)</p>
+              <p key={id} className="text-xs text-red-300/70 pl-4">· {id} (VASP)</p>
             ))}
           </div>
         )}
@@ -393,7 +394,7 @@ export default function RiskScoring({ clientId, clientType }: {
                   key={cat}
                   onClick={() => setCat61p(cat)}
                   className={clsx(
-                    'flex-1 py-1.5 rounded-lg text-[11px] font-medium border transition-colors',
+                    'flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors',
                     cat61p === cat
                       ? 'bg-[#d4a843]/10 border-[#d4a843]/30 text-[#d4a843]'
                       : 'border-[#1e2535] text-[#6b7280] hover:text-white'
@@ -406,7 +407,7 @@ export default function RiskScoring({ clientId, clientType }: {
 
             {/* Факторы высокого риска */}
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-red-400/70 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-red-400/70 mb-2">
                 Факторы повышенного риска
               </p>
               <div className="space-y-1">
@@ -424,7 +425,7 @@ export default function RiskScoring({ clientId, clientType }: {
 
             {/* Снижающие факторы */}
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-green-400/70 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-green-400/70 mb-2">
                 Снижающие факторы
               </p>
               <div className="space-y-1">
@@ -487,7 +488,7 @@ export default function RiskScoring({ clientId, clientType }: {
                     key={k}
                     onClick={() => setActiveBlock(k)}
                     className={clsx(
-                      'flex-1 py-1.5 px-1 rounded-lg text-[11px] font-medium border transition-colors truncate',
+                      'flex-1 py-1.5 px-1 rounded-lg text-xs font-medium border transition-colors truncate',
                       activeBlock === k ? 'text-white' : 'border-[#1e2535] text-[#6b7280] hover:text-white'
                     )}
                     style={activeBlock === k ? {
@@ -515,7 +516,7 @@ export default function RiskScoring({ clientId, clientType }: {
                     )}>
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <p className="text-sm font-medium text-white">{cr.label}</p>
-                        <span className="text-[10px] text-[#4b5563] shrink-0">max {cr.max}</span>
+                        <span className="text-xs text-[#4b5563] shrink-0">max {cr.max}</span>
                       </div>
                       <div className="relative">
                         <select
@@ -536,7 +537,7 @@ export default function RiskScoring({ clientId, clientType }: {
                         <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#4b5563] pointer-events-none" />
                       </div>
                       {isOv && (
-                        <p className="mt-1.5 text-[10px] text-red-400 flex items-center gap-1">
+                        <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" /> Авто-триггер КРИТИЧЕСКОГО уровня
                         </p>
                       )}
@@ -569,7 +570,7 @@ export default function RiskScoring({ clientId, clientType }: {
                       <p className={clsx('font-semibold', active ? c.color : 'text-[#4b5563]')}>
                         {c.label}
                       </p>
-                      <p className="text-[10px] text-[#374151]">{zones[lvl]}</p>
+                      <p className="text-xs text-[#374151]">{zones[lvl]}</p>
                     </div>
                   )
                 })}

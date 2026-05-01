@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { fmtDate } from '../utils/dates'
 import { useAuthStore } from '../store/authStore'
 import {
   BarChart2, Users, AlertTriangle, FileText, Shield,
@@ -164,10 +165,10 @@ const COLUMNS: Record<ReportType, { key: string; label: string; render?: (v: any
     },
     { key: 'risk_score', label: 'Балл', render: (v) => v != null ? `${v}%` : '—' },
     { key: 'onboarding_status', label: 'Статус' },
-    { key: 'created_at', label: 'Добавлен', render: (v) => v ? new Date(v).toLocaleDateString('ru-RU') : '—' },
+    { key: 'created_at', label: 'Добавлен', render: (v) => fmtDate(v) },
   ],
   transactions: [
-    { key: 'operation_date', label: 'Дата', render: (v) => new Date(v).toLocaleDateString('ru-RU') },
+    { key: 'operation_date', label: 'Дата', render: (v) => fmtDate(v) },
     { key: 'client_name', label: 'Клиент', render: (v, row) => v
       ? <Link to={`/clients/${row.id}`} className="text-[#d4a843] hover:underline">{v}</Link>
       : '—'
@@ -176,7 +177,7 @@ const COLUMNS: Record<ReportType, { key: string; label: string; render?: (v: any
     { key: 'amount_kgs', label: 'Сумма KGS', render: (v) => v ? `${v.toLocaleString('ru-RU')}` : '—' },
     { key: 'type_label', label: 'Вид операции', render: (v, row) => (
       <span>
-        {row.type_code && <span className="font-mono text-[10px] text-[#d4a843] mr-1">{row.type_code}</span>}
+        {row.type_code && <span className="font-mono text-xs text-[#d4a843] mr-1">{row.type_code}</span>}
         {v || '—'}
       </span>
     )},
@@ -206,8 +207,8 @@ const COLUMNS: Record<ReportType, { key: string; label: string; render?: (v: any
       }
       return <span className={clsx('text-xs', conf[v] || '')}>{labels[v] || v}</span>
     }},
-    { key: 'received_at', label: 'Получен', render: (v) => v ? new Date(v).toLocaleDateString('ru-RU') : '—' },
-    { key: 'expires_at', label: 'Действителен до', render: (v) => v ? new Date(v).toLocaleDateString('ru-RU') : '—' },
+    { key: 'received_at', label: 'Получен', render: (v) => fmtDate(v) },
+    { key: 'expires_at', label: 'Действителен до', render: (v) => fmtDate(v) },
     { key: 'days_until_expiry', label: 'Осталось дней', render: (v) => {
       if (v == null) return '—'
       if (v <= 0) return <span className="text-red-400 font-medium">Истёк</span>
@@ -217,7 +218,7 @@ const COLUMNS: Record<ReportType, { key: string; label: string; render?: (v: any
     }},
   ],
   sanctions: [
-    { key: 'checked_at', label: 'Дата', render: (v) => new Date(v).toLocaleDateString('ru-RU') },
+    { key: 'checked_at', label: 'Дата', render: (v) => fmtDate(v) },
     { key: 'checked_name', label: 'Проверяемое имя' },
     { key: 'result', label: 'Результат', render: (v) => {
       const conf: Record<string, string> = {
@@ -299,7 +300,7 @@ export default function Reports() {
 
         {/* Left: report selector */}
         <div className="space-y-2">
-          <p className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-3">Вид отчёта</p>
+          <p className="text-xs uppercase tracking-wider text-[#4b5563] mb-3">Вид отчёта</p>
           {REPORTS.map(r => {
             const Icon = r.icon
             const isActive = selected === r.key
@@ -322,7 +323,7 @@ export default function Reports() {
                     <p className={clsx('text-sm font-semibold', isActive ? 'text-white' : 'text-[#9ca3af]')}>
                       {r.title}
                     </p>
-                    <p className="text-[10px] text-[#4b5563] mt-0.5 line-clamp-2">{r.description}</p>
+                    <p className="text-xs text-[#4b5563] mt-0.5 line-clamp-2">{r.description}</p>
                   </div>
                   <ChevronRight className={clsx('w-4 h-4 shrink-0', isActive ? 'text-[#d4a843]' : 'text-[#1e2535]')} />
                 </div>
@@ -348,14 +349,14 @@ export default function Reports() {
               <div className="bg-[#0d1017] border border-[#1e2535] rounded-xl p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-white">{def.title}</p>
-                  <p className="text-[10px] text-[#4b5563]">{def.description.slice(0, 60)}...</p>
+                  <p className="text-xs text-[#4b5563]">{def.description.slice(0, 60)}...</p>
                 </div>
 
                 {def.filters.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {def.filters.map(f => (
                       <div key={f.key}>
-                        <label className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-1 block">
+                        <label className="text-xs uppercase tracking-wider text-[#4b5563] mb-1 block">
                           {f.label}
                         </label>
                         {f.type === 'date' ? (
@@ -383,7 +384,7 @@ export default function Reports() {
                   <button
                     onClick={generate}
                     disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#c49838] disabled:opacity-50 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-[#d4a843] text-[#0a0d14] rounded-lg text-sm font-semibold hover:bg-[#e0b84d] disabled:opacity-50 transition-colors"
                   >
                     <Play className="w-4 h-4" />
                     {loading ? 'Формирование...' : 'Сформировать'}
@@ -433,7 +434,7 @@ function SummaryView({ data }: { data: any }) {
       <div className="grid grid-cols-2 gap-4">
         {/* Clients */}
         <div className="bg-[#111520] rounded-lg p-4">
-          <p className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-3 flex items-center gap-1.5">
+          <p className="text-xs uppercase tracking-wider text-[#4b5563] mb-3 flex items-center gap-1.5">
             <Users className="w-3 h-3" /> Клиенты
           </p>
           <div className="space-y-1.5">
@@ -447,7 +448,7 @@ function SummaryView({ data }: { data: any }) {
 
         {/* Transactions */}
         <div className="bg-[#111520] rounded-lg p-4">
-          <p className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-3 flex items-center gap-1.5">
+          <p className="text-xs uppercase tracking-wider text-[#4b5563] mb-3 flex items-center gap-1.5">
             <AlertTriangle className="w-3 h-3" /> Операции
           </p>
           <div className="space-y-1.5">
@@ -460,7 +461,7 @@ function SummaryView({ data }: { data: any }) {
 
         {/* Documents */}
         <div className="bg-[#111520] rounded-lg p-4">
-          <p className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-3 flex items-center gap-1.5">
+          <p className="text-xs uppercase tracking-wider text-[#4b5563] mb-3 flex items-center gap-1.5">
             <FileText className="w-3 h-3" /> Документы
           </p>
           <div className="space-y-1.5">
@@ -471,7 +472,7 @@ function SummaryView({ data }: { data: any }) {
 
         {/* Sanctions */}
         <div className="bg-[#111520] rounded-lg p-4">
-          <p className="text-[10px] uppercase tracking-widest text-[#4b5563] mb-3 flex items-center gap-1.5">
+          <p className="text-xs uppercase tracking-wider text-[#4b5563] mb-3 flex items-center gap-1.5">
             <Shield className="w-3 h-3" /> Санкции
           </p>
           <div className="space-y-1.5">
@@ -484,7 +485,7 @@ function SummaryView({ data }: { data: any }) {
       <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/20 rounded-lg px-3 py-2">
         <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
         <p className="text-xs text-green-400">
-          Отчёт сформирован {new Date().toLocaleDateString('ru-RU')} — готов для направления в ГСФР
+          Отчёт сформирован {fmtDate(new Date())} — готов для направления в ГСФР
         </p>
       </div>
     </div>
@@ -530,7 +531,7 @@ function ResultTable({ data, columns, reportKey }: {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#1e2535] text-[10px] uppercase tracking-widest text-[#4b5563]">
+            <tr className="border-b border-[#1e2535] text-xs uppercase tracking-wider text-[#4b5563]">
               {columns.map(c => (
                 <th key={c.key} className="text-left px-4 py-3 whitespace-nowrap">{c.label}</th>
               ))}

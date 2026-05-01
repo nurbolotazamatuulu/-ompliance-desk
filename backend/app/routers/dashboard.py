@@ -269,7 +269,7 @@ def get_dashboard(
             level="critical", category="client",
             title="Клиенты с критическим риском",
             detail=f"{client_stats.critical} клиент(ов) требуют немедленного рассмотрения",
-            link="/clients",
+            link="/clients?risk=unacceptable",
             count=client_stats.critical,
         ))
 
@@ -323,7 +323,7 @@ def get_dashboard(
             level="info", category="client",
             title="Клиенты на онбординге",
             detail=f"{client_stats.pending} клиент(ов) ожидают завершения проверки",
-            link="/clients",
+            link="/clients?status=pending",
             count=client_stats.pending,
         ))
 
