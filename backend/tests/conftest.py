@@ -30,6 +30,9 @@ from app.tenancy import clear_current_tenant_id  # noqa: E402  (after env set)
 # fixture lookup (any test that asks for `two_tenants` finds it here).
 from tests.fixtures.tenancy import two_tenants  # noqa: E402, F401
 
+# Re-export audit fixtures (any test that asks for `tenant_with_user`).
+from tests.fixtures.audit import tenant_with_user  # noqa: E402, F401
+
 
 @event.listens_for(Engine, "connect")
 def _enable_sqlite_fk(dbapi_conn, _connection_record):
