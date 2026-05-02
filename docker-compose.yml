@@ -37,10 +37,10 @@ services:
       - "127.0.0.1:9000:9000"   # API endpoint
       - "127.0.0.1:9001:9001"   # Web console
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 10s
     networks:
       - compliance_net
