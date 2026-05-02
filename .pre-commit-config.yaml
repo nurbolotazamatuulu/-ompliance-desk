@@ -1,0 +1,28 @@
+# Pre-commit hooks for ComplianceDesk-VASP.
+# Local-only; not enforced in CI (CI runs the same checks via .github/workflows/ci.yml).
+#
+# Setup (one-time per developer):
+#   pip install pre-commit
+#   pre-commit install
+#
+# Manual run on all files:
+#   pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.7
+    hooks:
+      - id: ruff
+        # Phase 0 lenient set — same as backend/pyproject.toml [tool.ruff.lint] select.
+        args: ['--select=E9,F63,F7,F82']
+        files: ^backend/
