@@ -1,32 +1,21 @@
 {
-  "name": "compliance-desk",
+  "name": "compliance-desk-frontend",
   "version": "1.0.0",
-  "type": "module",
+  "private": true,
+  "description": "ComplianceDesk-VASP frontend monorepo (compliance, back-office, client-portal SPAs + shared)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@tanstack/react-query": "^5.40.0",
-    "axios": "^1.7.2",
-    "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
-    "lucide-react": "^0.383.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.23.1",
-    "xlsx": "^0.18.5",
-    "zustand": "^4.5.2"
-  },
-  "devDependencies": {
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.0",
-    "autoprefixer": "^10.4.19",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.4",
-    "typescript": "^5.4.5",
-    "vite": "^5.2.12"
+    "dev:compliance": "npm run dev --workspace=compliance-frontend",
+    "dev:backoffice": "npm run dev --workspace=backoffice-frontend",
+    "dev:portal": "npm run dev --workspace=client-portal-frontend",
+    "build": "npm run build --workspaces --if-present",
+    "build:compliance": "npm run build --workspace=compliance-frontend",
+    "build:backoffice": "npm run build --workspace=backoffice-frontend",
+    "build:portal": "npm run build --workspace=client-portal-frontend",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }
