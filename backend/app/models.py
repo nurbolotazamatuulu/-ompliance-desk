@@ -6,7 +6,8 @@
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean,
-    ForeignKey, Text, Enum, Float, JSON
+    ForeignKey, Text, Enum, Float, JSON,
+    text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -18,11 +19,46 @@ from app.database import Base
 # ─── Справочники (enums) ─────────────────────────────────────────────────────
 
 class UserRole(str, enum.Enum):
+    """
+    DEPRECATED in Phase 1 — use UserRoleV2 from app.rbac.roles instead.
+
+    Kept here for backward compatibility with existing code paths until
+    migrate_user_roles.py runs and Phase 2 router refactor switches all
+    permission checks to UserRoleV2 + RBAC matrix in app.rbac.
+
+    See app.rbac.roles.USER_ROLE_MIGRATION_MAP for the legacy → V2
+    correspondence and migrate_user_roles.py for the offline migration
+    procedure.
+    """
+
     SUPER_ADMIN = "super_admin"       # Ты — управление всеми тенантами
     COMPANY_ADMIN = "company_admin"   # Админ компании-клиента
     COMPLIANCE_OFFICER = "compliance_officer"
     MANAGER = "manager"               # Только просмотр + отчёты
     READ_ONLY = "read_only"
+
+
+class UserLifecycleState(str, enum.Enum):
+    """
+    User account lifecycle states.
+
+    Stored as String(20) on User.lifecycle_state — values validated at
+    application level (FSM in Phase Auth block), not via SA Enum, so
+    extending the list does not require ALTER TYPE on PG.
+
+    States:
+        ACTIVE     — normal operation; can authenticate.
+        LOCKED     — temporary lockout (failed_login_count threshold,
+                     manual admin lock). User.locked_until indicates
+                     auto-unlock time when set.
+        TERMINATED — irreversibly disabled (offboarded). Audit references
+                     to this user remain via actor_user_id (RESTRICT FK)
+                     and the hash-anchored actor_username snapshot.
+    """
+
+    ACTIVE = "active"
+    LOCKED = "locked"
+    TERMINATED = "terminated"
 
 
 class ClientType(str, enum.Enum):
@@ -61,7 +97,24 @@ class LicenseStatus(str, enum.Enum):
 # ─── Компании (тенанты) ───────────────────────────────────────────────────────
 
 class Company(Base):
-    """Каждая компания-покупатель — это тенант."""
+    """
+    Tenant entity (canonical Tenant per AD-1; concept Tenant ≡ Company).
+
+    ── Lifecycle (Phase 1, AD-1 + RBAC+FSM block) ─────────────────────
+    `lifecycle_state` is the source of truth for tenant state — values
+    in app.tenancy.lifecycle.TenantLifecycleState. Transitions are
+    controlled by the FSM functions in app.tenancy.lifecycle and write
+    AuditEvent entries via app.audit.audit_log.
+
+    `is_active` (Boolean) is a DENORMALIZATION kept for backward
+    compatibility with legacy Phase 0 routes that filter via
+    `WHERE is_active=true`. It is updated SYNCHRONOUSLY by the FSM
+    functions: True iff lifecycle_state == 'active'. Direct writes to
+    is_active outside the FSM are a contract violation — see Q-tenancy-C
+    for the Phase 2 plan to drop this column after all legacy callsites
+    migrate to lifecycle_state filtering.
+    """
+
     __tablename__ = "companies"
 
     id = Column(Integer, primary_key=True)
@@ -98,6 +151,34 @@ class Company(Base):
 
     max_clients = Column(Integer, default=100)
     is_active   = Column(Boolean, default=True)
+
+    # ── Lifecycle FSM (Phase 1 — AD-1) ──────────────────────────────────
+    # Values: see app.tenancy.lifecycle.TenantLifecycleState. String(30)
+    # instead of SA Enum — extending the list does not require ALTER TYPE
+    # on PG. Source of truth; is_active is denorm (see class docstring).
+    lifecycle_state = Column(
+        String(30),
+        nullable=False,
+        server_default="active",
+        doc="Tenant FSM state. Source of truth; is_active is denorm.",
+    )
+    # ── Subscription / SKU (per AD-5) ───────────────────────────────────
+    # NULL for legacy AFG row pre-migration; populated by Phase 2
+    # subscription assignment flow.
+    subscription_sku = Column(
+        String(10),
+        nullable=True,
+        doc="Subscription SKU; values in app.tenancy.lifecycle.SubscriptionSKU.",
+    )
+    # ── Lifecycle timestamps + reasons ──────────────────────────────────
+    provisioned_at     = Column(DateTime, nullable=True)
+    activated_at       = Column(DateTime, nullable=True)
+    suspended_at       = Column(DateTime, nullable=True)
+    suspension_reason  = Column(String(500), nullable=True)
+    terminated_at      = Column(DateTime, nullable=True)
+    termination_reason = Column(String(500), nullable=True)
+    # license_expires_at — already defined above.
+
     created_at  = Column(DateTime, server_default=func.now())
     updated_at  = Column(DateTime, onupdate=func.now())
 
@@ -118,6 +199,46 @@ class User(Base):
     role = Column(Enum(UserRole), nullable=False)
     is_active = Column(Boolean, default=True)
     last_login_at = Column(DateTime)
+
+    # ── Lifecycle (Phase 1) ─────────────────────────────────────────────
+    # Values: see UserLifecycleState above. String(20), not SA Enum, so
+    # adding states (e.g. 'pending_email_verify') is a code-only change.
+    lifecycle_state = Column(
+        String(20),
+        nullable=False,
+        server_default="active",
+        doc="User account lifecycle state.",
+    )
+    # ── MFA (Phase 1 schema; enrollment in Phase Auth) ──────────────────
+    # mfa_secret is plaintext in Phase 1 — see Q-auth-A. Phase Auth block
+    # MUST encrypt via app.crypto before activating MFA endpoints.
+    mfa_enrolled = Column(
+        Boolean,
+        nullable=False,
+        server_default=text("0"),
+        doc="True after successful MFA enrollment (Phase Auth flow).",
+    )
+    mfa_secret = Column(String(255), nullable=True)
+    # ── Auth metadata (Phase 1 schema; logic in Phase Auth) ─────────────
+    password_changed_at = Column(DateTime, nullable=True)
+    failed_login_count = Column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+        doc="Resets to 0 on successful login; threshold → lockout.",
+    )
+    locked_until = Column(DateTime, nullable=True)
+    # last_login_at — already defined above.
+
+    # ── RBAC V2 parallel column (Phase 1 — populated by ─────────────────
+    #    app.rbac.migrate_user_roles CLI; Phase 2 routers switch from
+    #    .role to .role_v2). Keep .role unchanged for backward compat.
+    role_v2 = Column(
+        String(30),
+        nullable=True,
+        doc="UserRoleV2 value; NULL until migrate_user_roles.py runs.",
+    )
+
     created_at = Column(DateTime, server_default=func.now())
 
     company = relationship("Company", back_populates="users")
