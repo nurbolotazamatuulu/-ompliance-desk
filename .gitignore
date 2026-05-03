@@ -45,3 +45,11 @@ alembic/versions/*.pyc
 *.cert
 secrets/
 .claude/
+
+# Working notes / Claude session artifacts (never commit)
+claude-context/
+claude-context.tar.gz
+
+# DB dumps from manual backups (use proper backup procedure for prod data)
+backup_before_*.sql
+backup_*.sql
