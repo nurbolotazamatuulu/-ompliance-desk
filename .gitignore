@@ -22,6 +22,10 @@ frontend/.env
 frontend/.env.*
 !frontend/.env.example
 
+# Vite cache (handoff/starter and any vite project)
+.vite/
+.vite-cache/
+
 # Docker volumes / local DB data
 postgres_data/
 pgdata/
