@@ -80,3 +80,52 @@ export const useUsers = () =>
     queryKey: ['users'],
     queryFn: api.listUsers,
   });
+
+// ─── Dashboard ──────────────────────────────────────────────────────────
+
+/**
+ * Pre-aggregated дашборд-метрики (KPI + risk donut). Server-shaped:
+ * один поход к API → готовые числа. См. api.getDashboardSummary +
+ * types.DashboardSummary.
+ */
+export const useDashboardSummary = () =>
+  useQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: api.getDashboardSummary,
+  });
+
+/**
+ * Очередь дня для Дашборда — top 12 клиентов отсортированных по SLA asc,
+ * с client-side вторичной сортировкой по риску desc.
+ *
+ * **ЕДИНСТВЕННОЕ явное исключение из глобального `staleTime: Infinity`.**
+ * Дашборд горит → нужна live-картина: refetchInterval 60_000 ms.
+ * Не копировать pattern в новые features без обоснования.
+ */
+export const useDashboardQueue = () =>
+  useQuery({
+    queryKey: ['dashboard', 'queue'],
+    queryFn: () =>
+      api.listClients({
+        page: 1,
+        per_page: 12,
+        filters: {},
+        sort: { field: 'sla', dir: 'asc' },
+      }),
+    refetchInterval: 60_000,
+    select: (page) => {
+      // Клиенты без slaDeadline идут в конец; внутри одинаковых SLA-bucket'ов —
+      // более рисковые сверху. listClients уже отсортировал по slaDeadline asc,
+      // поэтому дополнительно стабильно тащим overdue/no-deadline по краям.
+      const items = [...page.items].sort((a, b) => {
+        const aHas = a.slaDeadline ? 1 : 0;
+        const bHas = b.slaDeadline ? 1 : 0;
+        if (aHas !== bHas) return bHas - aHas;
+        if (a.slaDeadline && b.slaDeadline && a.slaDeadline !== b.slaDeadline) {
+          return a.slaDeadline < b.slaDeadline ? -1 : 1;
+        }
+        return b.risk.total - a.risk.total;
+      });
+      return { ...page, items };
+    },
+  });

@@ -22,12 +22,20 @@ import type {
   Transaction,
   User,
 } from '../types';
-import type { ListClientsParams, Page, SortSpec } from '../types/api';
+import type { DashboardSummary, ListClientsParams, Page, SortSpec } from '../types/api';
 import { CLIENTS } from '../mocks/clients';
 import { SANCTIONS } from '../mocks/sanctions';
 import { TRANSACTIONS } from '../mocks/transactions';
 import { CURRENT_USER, USERS } from '../mocks/users';
 import type { ClientFilters } from '../types/api';
+
+/**
+ * Порог в часах для KPI «SLA-риск» — клиент с slaDeadline в этом окне или
+ * уже просроченный считается «under SLA risk». 12ч — placeholder,
+ * подтвердить с АФГ business + ГСФР рег. (рабочие дни vs календарные).
+ * См. Q-frontend-O.
+ */
+export const SLA_AT_RISK_HOURS = 12; // TODO Q-frontend-O
 
 const delay = (ms?: number): Promise<void> => {
   const t = ms ?? 300 + Math.floor(Math.random() * 500);
@@ -120,6 +128,50 @@ export const listClients = async (params: ListClientsParams): Promise<Page<Clien
 export const getClient = async (id: string): Promise<Client | undefined> => {
   await delay();
   return CLIENTS.find((c) => c.id === id);
+};
+
+// ─── Dashboard summary ──────────────────────────────────────────────────
+
+/**
+ * Pre-aggregated дашборд-метрики. Контракт server-shaped (Phase A.3) —
+ * Phase 2 backend заменит mock на real GET /api/dashboard/summary, типы
+ * и сигнатуры hook'а не меняются.
+ *
+ * Mock-internals: один проход по CLIENTS + reduce. Дёшево даже на 10k
+ * клиентов; в продакшене будет SQL + индексы.
+ */
+export const getDashboardSummary = async (): Promise<DashboardSummary> => {
+  await delay();
+  const now = Date.now();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStartMs = todayStart.getTime();
+  const slaThresholdMs = SLA_AT_RISK_HOURS * 60 * 60 * 1000;
+
+  let inReview = 0;
+  let newToday = 0;
+  let slaAtRisk = 0;
+  let critical = 0;
+  const riskDist = { low: 0, medium: 0, high: 0, critical: 0 };
+
+  for (const c of CLIENTS) {
+    if (c.status === 'in_review') inReview += 1;
+    if (new Date(c.createdAt).getTime() >= todayStartMs) newToday += 1;
+    if (c.slaDeadline) {
+      const deadlineMs = new Date(c.slaDeadline).getTime();
+      if (deadlineMs - now <= slaThresholdMs) slaAtRisk += 1;
+    }
+    if (c.risk.level === 'critical') critical += 1;
+    riskDist[c.risk.level] += 1;
+  }
+
+  return {
+    in_review_count: inReview,
+    new_today_count: newToday,
+    sla_at_risk_count: slaAtRisk,
+    critical_count: critical,
+    risk_distribution: riskDist,
+  };
 };
 
 // ─── Sanctions ──────────────────────────────────────────────────────────

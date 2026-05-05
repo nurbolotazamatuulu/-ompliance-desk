@@ -2,6 +2,7 @@ import { Navigate, type RouteObject } from 'react-router-dom';
 import { App } from './App';
 import ComponentsGallery from './features/_dev/ComponentsGallery';
 import ClientsListPage from './features/clients-list/ClientsListPage';
+import DashboardPage from './features/dashboard/DashboardPage';
 
 // Эти placeholder'ы — заглушки. Phase C-E их заменяют на feature-страницы.
 const Placeholder = ({ name }: { name: string }) => (
@@ -14,7 +15,7 @@ const Placeholder = ({ name }: { name: string }) => (
 
 const baseChildren: RouteObject[] = [
   { index: true, element: <Navigate to="/dashboard" replace /> },
-  { path: 'dashboard',                element: <Placeholder name="Дашборд офицера" /> },
+  { path: 'dashboard',                element: <DashboardPage /> },
   { path: 'clients',                  element: <ClientsListPage /> },
   { path: 'clients/:id',              element: <Navigate to="anketa" replace /> },
   { path: 'clients/:id/anketa',       element: <Placeholder name="Карточка · Анкета" /> },

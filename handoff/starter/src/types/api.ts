@@ -49,3 +49,26 @@ export interface ListClientsParams {
 
 /** Hardcoded для Stage 2; Phase 2+ — может уйти в URL для UX-customization. */
 export const PAGE_SIZE = 50;
+
+// ─── Dashboard summary (server-shaped) ──────────────────────────────────
+
+/**
+ * Pre-aggregated counts для KPI-строки и donut'а Дашборда.
+ *
+ * Контракт уже как у real backend (один endpoint → готовые числа), даже
+ * когда mock внутри агрегирует in-memory. Когда придёт Phase 2 backend
+ * (`GET /api/dashboard/summary`) — переписать только internals
+ * `getDashboardSummary` в lib/api.ts; компоненты не трогаются.
+ */
+export interface DashboardSummary {
+  in_review_count: number;
+  new_today_count: number;
+  sla_at_risk_count: number;
+  critical_count: number;
+  risk_distribution: {
+    low: number;
+    medium: number;
+    high: number;
+    critical: number;
+  };
+}
