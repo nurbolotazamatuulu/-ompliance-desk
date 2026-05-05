@@ -266,3 +266,8 @@ Phase 2 (migration & integration), Phase 3 (UBO + IPDS + transaction monitoring)
 - Frontend компоненты на TypeScript, стили — Tailwind
 - Не ломать существующий sanctions flow при изменении risk-роутера
 - Phase 1 новые модули (`app/audit/`, `app/rbac/`, `app/tenancy/`) — см. их `__init__.py` для public API; не импортировать private `_*` функции напрямую
+- Не добавлять `Co-Authored-By` trailer в commit messages. Авторство
+  фиксируется через session log в `~/.claude/projects/`, не через
+  коммиты. Это commercial closed-source проект — `git log` будет
+  виден customer'ам и аудиторам, AI co-authorship trailer создаёт
+  ложные вопросы про IP ownership и лицензирование.
