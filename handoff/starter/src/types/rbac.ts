@@ -70,17 +70,44 @@ export const ROLE_PERMISSIONS_MOCK: Record<UserRoleV2, Set<Permission>> = {
 };
 
 /**
- * Маппинг legacy `User.role` (handoff types/index.ts) на UserRoleV2.
- * Используется до Phase 2 router refactor когда `current_user.role` —
- * legacy enum. После Phase 2 — replaced с прямым `role_v2` в session.
+ * Маппинг legacy role string → UserRoleV2.
+ *
+ * Объединённый set из ДВУХ независимых legacy-enum'ов:
+ *
+ *   1. Handoff frontend Role (handoff/spec/data-model.ts + handoff/starter/src/types/index.ts):
+ *      compliance_officer / compliance_lead / operator / admin / auditor / client
+ *      Используется в текущих mocks/users.ts при работе frontend в Stage 2/3.
+ *
+ *   2. Backend legacy UserRole (backend/app/models.py UserRole):
+ *      super_admin / company_admin / compliance_officer / manager / read_only
+ *      Прилетит в Phase 2 router refactor когда frontend интегрируется
+ *      с backend session (JWT claims или /auth/me).
+ *
+ * Stage 2 — переходный период; `mapLegacyRole` должен быть resilient
+ * к обоим источникам.
+ *
+ * После Phase 2 — заменяется прямым `role_v2` в session, эта функция уйдёт.
+ *
+ * ⚠️ Conflict warning на ключе "admin":
+ *   - В handoff Role 'admin' = tenant-level админ ОВА → 'tenant_admin'.
+ *   - В backend UserRole 'admin' НЕ существует (есть super_admin и company_admin).
+ *   - Если в будущем backend добавит plain 'admin' — semantic будет неоднозначен.
+ *     Сейчас обрабатываем как handoff-side значение → 'tenant_admin'.
  */
 const LEGACY_TO_V2: Record<string, UserRoleV2> = {
-  compliance_lead: 'tenant_admin', // legacy "lead" ~ tenant_admin
+  // ── Handoff frontend roles (types/index.ts:41-45, mocks/users.ts) ──
+  compliance_lead: 'tenant_admin', // handoff "lead" — senior compliance в одном tenant
   compliance_officer: 'compliance_officer',
-  operator: 'analyst',
-  admin: 'tenant_admin', // legacy "admin" — tenant-level в АФГ MVP
-  auditor: 'analyst', // read-only audit как analyst для frontend
+  operator: 'analyst', // handoff "operator" — back-office, read-mostly
+  admin: 'tenant_admin', // handoff "admin" — tenant-level админ ОВА (АФГ MVP)
+  auditor: 'analyst', // handoff "auditor" — read-only review
   client: 'client_user',
+
+  // ── Backend legacy roles (backend/app/models.py UserRole, для Phase 2 integration) ──
+  super_admin: 'super_admin', // backend vendor-level (cross-tenant)
+  company_admin: 'tenant_admin', // backend tenant админ (≡ handoff "admin")
+  manager: 'compliance_officer', // defensive fallback (см. q_rbac_a) — НЕ analyst
+  read_only: 'analyst',
 };
 
 export const mapLegacyRole = (role: string): UserRoleV2 =>
