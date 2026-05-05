@@ -5,43 +5,66 @@
 - **Backend:** FastAPI + PostgreSQL + Python 3.11 (`/opt/homebrew/bin/python3.11`)
 - **Frontend:** React + TypeScript + Tailwind CSS
 - **Инфра:** Docker
-- **Порты:** backend `8002`, frontend `5173`, DB `5433`
+- **Порты (local dev):** backend `8002` (uvicorn), frontend `5173` (Vite dev), DB `5433`
+- **Порты (Docker Compose):** backend `8080:8000`, frontend `80:80`, DB `5433:5432` — см. README
 - **БД:** пользователь `compliance_user`, база `compliance_db`
 - **Путь проекта:** `~/Documents/compliance-desk/`
 
 ## Ключевые файлы
 
+Phase 0 (legacy modules — comply with backward compat):
+
 ```
-backend/app/routers/risk.py          # Роутер риск-скоринга
-backend/app/routers/sanctions.py     # Роутер санкционного скрининга
-backend/app/sanctions_loader.py      # Парсеры санкционных списков (XML, CSV)
+backend/app/auth.py                       # Legacy auth helpers (Phase 0); Block 4 → app/auth/ package
+backend/app/models.py                     # ORM модели (Phase 1 Block 3 расширил Company + User)
+backend/app/routers/risk.py               # Роутер риск-скоринга
+backend/app/routers/sanctions.py          # Роутер санкционного скрининга
+backend/app/sanctions_loader.py           # Парсеры санкционных списков (XML, CSV)
 frontend/src/components/RiskScoring.tsx   # UI компонент скоринга
-frontend/src/pages/ClientCard.tsx    # Карточка клиента со вкладками
+frontend/src/pages/ClientCard.tsx         # Карточка клиента со вкладками
+```
+
+Phase 1 (новые модули):
+
+```
+backend/app/audit/                        # Hash-chain audit log (Block 2, AD-Q2)
+backend/app/rbac/                         # UserRoleV2 + Permission matrix (Block 3)
+backend/app/tenancy/                      # ContextVar + sql_filter + lifecycle FSM (Block 1, AD-7)
+backend/app/tenancy/lifecycle.py          # Tenant FSM (Block 3)
+docs/vasp-expansion/04-technical-plan.md  # Phase 1 detailed plan
+docs/vasp-expansion/05-roadmap.md         # Phase 1+ roadmap
 ```
 
 ## Статус разработки
 
-### Завершённые этапы
+### Phase 0 — инструмент комплаенс-офицера (этапы 1–5, отгружены)
 
-| Этап | Что сделано |
-|------|-------------|
-| 1 | Auth / мультитенантность |
-| 2 | Реестр клиентов |
-| 3 | Карточка клиента — анкета (исходно по Постановлению КР № 606, утратило силу; **требуется ревизия** под Положение о CDD от 14.11.2025 № 739) |
-| 4 | Санкционный скрининг |
-| 5 | Риск-скоринг (Приказ ГСФР 61/п) |
+| Этап | Что сделано | Заметка |
+|------|-------------|---------|
+| 1 | Базовый login + multi-tenant скаффолдинг | **Auth переписывается с нуля в Phase 1 Block 4** (Argon2id + JWT RS256 + TOTP MFA + refresh tokens). Multi-tenancy упрочнён через AD-7 в Phase 1 Block 1. |
+| 2 | Реестр клиентов | — |
+| 3 | Карточка клиента — анкета | **Анкета по Постановлению № 606 (утратило силу).** Требуется ревизия под Положение о CDD от 14.11.2025 № 739 в Phase 2. |
+| 4 | Санкционный скрининг | — |
+| 5 | Риск-скоринг (Приказ ГСФР 61/п) | Pre-Block-4 fix `67f3f4c` нормализовал PG `risklevel` enum (latent override-bug закрыт). |
 
-### Ожидают реализации
+### Phase 1 — VASP-фундамент (`feature/vasp-expansion`, 3/6 блоков shipped)
 
-> ⚠️ Этот roadmap составлен под scope «инструмент комплаенс-офицера» и пересматривается в рамках расширения до VASP-платформы. Актуальный план будет в `docs/vasp-expansion/03-architecture.md` и `05-roadmap.md`. До завершения шага 3 считать таблицу ниже ориентировочной.
+Полный план — [`docs/vasp-expansion/04-technical-plan.md`](docs/vasp-expansion/04-technical-plan.md). Roadmap — [`docs/vasp-expansion/05-roadmap.md`](docs/vasp-expansion/05-roadmap.md).
 
-| Этап | Что нужно сделать |
-|------|-------------------|
-| 6 | Реестр УБО и ИПДС |
-| 7 | Трекер документов и дедлайнов |
-| 8 | Детектор подозрительных операций (коды 40001–40088, 10000–38099) |
-| 9 | Нормативная база |
-| 10 | Дашборд |
+| Block | Scope | Status | Commit |
+|---|---|---|---|
+| 1 | Multi-tenancy infrastructure (AD-7) — `app/tenancy/` | ✅ shipped | `7417899` |
+| 2 | AuditEvent с hash-chain (AD-Q2) — `app/audit/` | ✅ shipped | `b56548c` |
+| 3 | RBAC + tenant FSM + user extensions — `app/rbac/`, `app/tenancy/lifecycle.py`, `User/Company` поля | ✅ shipped | `b5c6699` |
+| 4 | Auth (Argon2id + JWT RS256 + TOTP MFA + refresh tokens) | 🔵 next | — |
+| 5 | Settings (TenantSettings + RiskSettings + PolicyDocument + RetentionPolicy) | 🔵 | — |
+| 6 | License validation (RSA-4096 JWT verify on startup) + APScheduler | 🔵 | — |
+
+**`feature/vasp-expansion` → `main` merge запрещён** до закрытия всех 6 блоков. Три блока — фундамент, не production-ready Phase 1.
+
+### Phase 2+ — domain expansion
+
+Phase 2 (migration & integration), Phase 3 (UBO + IPDS + transaction monitoring), Phase 4 (full VASP Operations SKU + custodial omnibus) — детали в `05-roadmap.md`.
 
 ## Санкционный скрининг
 
@@ -205,12 +228,16 @@ frontend/src/pages/ClientCard.tsx    # Карточка клиента со вк
 - Массовые правки (>5 файлов за один шаг).
 - Изменения в `backend/app/routers/sanctions.py` и `sanctions_loader.py` — санкционный модуль критичен, ломать нельзя.
 
-### Соглашения по миграциям
+### Соглашения по миграциям (Phase 1 — manual, Phase 2 — Alembic)
 
-- Только `alembic revision --autogenerate -m "..."`, ручные миграции — исключение.
-- Каждая миграция — атомарная, одна логическая единица.
-- Перед `upgrade` — показать diff и дождаться подтверждения.
-- В сообщении миграции — префикс с номером этапа: `"stage-6: add ubo tables"`.
+**Phase 1 (текущая):** Alembic ещё не настроен (Q-meta-D). Миграции пишутся вручную как:
+
+- SQL файлы в корне (исторический паттерн): `migrate_risk_level.sql`, `migrate_risklevel_normalize_case.sql`. Будут перенесены при настройке Alembic — Q-meta-E.
+- Python-скрипты в модулях: `app/audit/migrate_legacy.py`, `app/rbac/migrate_user_roles.py` — CLI-утилиты с `--dry-run` / `--commit` / `--force`.
+
+Каждая миграция — атомарная, одна логическая единица. Перед apply — показать SQL/код и дождаться подтверждения.
+
+**Phase 2 (запланировано):** настройка Alembic + retroactive baseline. После этого правило: только `alembic revision --autogenerate -m "..."`, manual migrations — исключение. В сообщении — префикс этапа: `"phase-2: add ubo tables"`.
 
 ## Процесс расширения до VASP-платформы
 
@@ -235,6 +262,7 @@ frontend/src/pages/ClientCard.tsx    # Карточка клиента со вк
 ## Соглашения по коду
 
 - API-роутеры — в `backend/app/routers/`
-- Все изменения схемы БД — через Alembic миграции
+- Phase 1 — manual SQL/Python миграции (см. «Соглашения по миграциям» выше); Alembic — Phase 2
 - Frontend компоненты на TypeScript, стили — Tailwind
 - Не ломать существующий sanctions flow при изменении risk-роутера
+- Phase 1 новые модули (`app/audit/`, `app/rbac/`, `app/tenancy/`) — см. их `__init__.py` для public API; не импортировать private `_*` функции напрямую

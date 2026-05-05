@@ -198,6 +198,18 @@ from app.tenancy.lifecycle import (
 
 **Pre-Block-4 fix (commit `67f3f4c`):** нормализован PG `risklevel` enum до `{LOW, MEDIUM, HIGH, CRITICAL}` — устраняет latent production bug в override-flow риск-скоринга.
 
+**CLI bootstrap (`backend/app/cli.py`) — атомарная команда:**
+
+`docker-compose exec backend python -m app.cli bootstrap` ОБЯЗАН одной транзакцией:
+
+1. Создать **Tenant** через `app.tenancy.lifecycle.provision_tenant` (с `subscription_sku` из аргумента + `license_key` либо placeholder если не передан).
+2. Создать **SUPER_ADMIN user** через новый Block 4 user-creation flow (Argon2id-hashed password от `getpass`).
+3. Вывести на stdout **license_key placeholder** или real key (если уже есть JWT артефакт из `tools/license-generator/`).
+
+Любой шаг fail → rollback всей транзакции (нет половинного состояния «tenant создан, user не создан»). Тач не только `app/auth/` (Block 4 territory), но и `app/tenancy/lifecycle.py` (Block 1+3 territory) — атомарность критична. Не писать только user-creation часть.
+
+Это первый item в Block 4 deliverables — без него customer не сможет ничего залогинить после `docker-compose up`.
+
 ---
 
 ### Block 5: Settings + RetentionPolicy 🔵
