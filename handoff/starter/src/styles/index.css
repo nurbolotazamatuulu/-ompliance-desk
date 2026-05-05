@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body { background: var(--cd-bg); color: var(--cd-text); font-family: var(--cd-font-sans); font-size: 13px; }
+  * { box-sizing: border-box; }
+}
+
+@layer utilities {
+  .cd-mono { font-family: var(--cd-font-mono); font-feature-settings: 'tnum' 1; }
+  .cd-caps {
+    font-family: var(--cd-font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10px;
+    color: var(--cd-text-mute);
+    font-weight: 500;
+  }
+  .cd-tnum { font-variant-numeric: tabular-nums; }
+}
