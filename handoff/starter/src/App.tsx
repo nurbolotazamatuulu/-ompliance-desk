@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
+import ToastViewport from './components/primitives/Toast';
 
 /**
  * Корневой layout приложения комплаенс-офицера.
@@ -8,6 +9,9 @@ import Header from './components/layout/Header';
  * Боковое меню фиксированной ширины + правая колонка со sticky-header
  * и роутинг-outlet'ом. Личный кабинет клиента (/portal) использует
  * собственный layout — см. routes.tsx.
+ *
+ * ToastViewport монтируется здесь — глобальный stack тостов из useUIStore
+ * (Phase B addition).
  */
 export function App() {
   return (
@@ -19,6 +23,7 @@ export function App() {
           <Outlet />
         </div>
       </main>
+      <ToastViewport />
     </div>
   );
 }
