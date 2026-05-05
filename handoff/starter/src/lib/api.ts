@@ -95,8 +95,10 @@ const sortClientsBy = (items: Client[], sort: SortSpec): Client[] => {
         bv = b.status;
         break;
       case 'sla':
-        av = a.slaDeadline ?? '';
-        bv = b.slaDeadline ?? '';
+        // NULLs LAST при asc — клиенты без дедлайна не срочные. ISO даты
+        // лексикографически упорядочены; '￿' гарантированно больше.
+        av = a.slaDeadline ?? '￿';
+        bv = b.slaDeadline ?? '￿';
         break;
       case 'createdAt':
       default:

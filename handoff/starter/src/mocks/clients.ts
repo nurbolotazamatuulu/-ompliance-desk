@@ -106,6 +106,26 @@ const riskFor = (status: ClientStatus) => {
 
 // ─── Главный генератор ──────────────────────────────────────────────────
 
+/**
+ * Назначает slaDeadline ~7 клиентам со статусами `in_review`/`awaiting_docs`,
+ * относительно момента запуска приложения:
+ *   - первые 2 → 0.5–3.5ч → red rowTone, попадают в Queue вверх
+ *   - остальные 5 → 4.5–11.5ч → orange tone, поднимают KPI «SLA-риск»
+ * Это даёт визуально проверяемое состояние: KPI orange + критическую row.
+ */
+const assignSlaDeadlines = (list: Client[]): void => {
+  const now = Date.now();
+  const candidates = list.filter(
+    (c) => c.status === 'in_review' || c.status === 'awaiting_docs',
+  );
+  const targets = candidates.slice(0, 7);
+  targets.forEach((c, idx) => {
+    const hours = idx < 2 ? 0.5 + rng() * 3.0 : 4.5 + rng() * 7.0;
+    const deadline = new Date(now + hours * 60 * 60 * 1000).toISOString();
+    (c as { slaDeadline?: string }).slaDeadline = deadline;
+  });
+};
+
 export const generateClients = (n: number): Client[] => {
   const list: Client[] = [];
   for (let i = 0; i < n; i++) {
@@ -186,6 +206,7 @@ export const generateClients = (n: number): Client[] => {
       list.push(pf);
     }
   }
+  assignSlaDeadlines(list);
   return list;
 };
 
