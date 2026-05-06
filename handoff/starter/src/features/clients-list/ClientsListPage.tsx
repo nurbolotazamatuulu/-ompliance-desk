@@ -34,7 +34,7 @@ import LoadingState from './states/LoadingState';
 import EmptyClientsState from './states/EmptyClientsState';
 import EmptyResultsState from './states/EmptyResultsState';
 import ErrorState from './states/ErrorState';
-import NoRightsState from './states/NoRightsState';
+import NoRightsState from '../../components/states/NoRightsState';
 import { useState } from 'react';
 
 const periodToFilters = (period: string | null): { from: string; to: string } => {
@@ -152,7 +152,7 @@ export default function ClientsListPage() {
   };
 
   // ── Permission denied — full-page lock ──────────────────────────────
-  if (!hasReadPerm) return <NoRightsState />;
+  if (!hasReadPerm) return <NoRightsState resource="реестру клиентов" />;
 
   // ── Render ──────────────────────────────────────────────────────────
   const total = query.data?.total ?? 0;
