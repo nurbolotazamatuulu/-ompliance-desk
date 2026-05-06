@@ -42,6 +42,28 @@ const delay = (ms?: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, t));
 };
 
+/**
+ * Resource не найден по идентификатору. Mock бросает для unknown ID;
+ * Phase 2 backend mapper будет конвертировать HTTP 404 → NotFoundError.
+ *
+ * Различие от generic Error важно для UI: 404 → NotFoundState
+ * (полнограничный EmptyState с кнопкой к реестру), 500 → ErrorState
+ * (с retry). См. ClientCardPage isError branch.
+ *
+ * Использовать `error instanceof NotFoundError` в consumer'ах.
+ * Не полагаться на error.message (хрупко при i18n).
+ *
+ * Контракт react-query v5: queryFn НЕ должен возвращать undefined
+ * (treated как error). Mock'и которые раньше возвращали `undefined`
+ * для unknown ID — должны throw NotFoundError.
+ */
+export class NotFoundError extends Error {
+  constructor(resource: string, id: string) {
+    super(`${resource} not found: ${id}`);
+    this.name = 'NotFoundError';
+  }
+}
+
 // ─── Filter / sort helpers (in-memory) ──────────────────────────────────
 
 const matchesFilters = (c: Client, filters: ClientFilters): boolean => {
@@ -127,9 +149,11 @@ export const listClients = async (params: ListClientsParams): Promise<Page<Clien
   };
 };
 
-export const getClient = async (id: string): Promise<Client | undefined> => {
+export const getClient = async (id: string): Promise<Client> => {
   await delay();
-  return CLIENTS.find((c) => c.id === id);
+  const c = CLIENTS.find((x) => x.id === id);
+  if (!c) throw new NotFoundError('Client', id);
+  return c;
 };
 
 // ─── Dashboard summary ──────────────────────────────────────────────────

@@ -29,6 +29,7 @@ import {
   useCurrentUser,
   useUsers,
 } from '../../lib/hooks';
+import { NotFoundError } from '../../lib/api';
 import { ROLE_PERMISSIONS_MOCK, mapLegacyRole } from '../../types/rbac';
 import { formatDate, formatINN } from '../../lib/format';
 import type { Client } from '../../types';
@@ -74,9 +75,15 @@ export default function ClientCardPage() {
   if (!hasReadPerm) return <NoRightsState resource="карточке клиента" />;
 
   // ── Loading / error / not-found ─────────────────────────────────────
+  // В TanStack Query v5 queryFn НЕ должна возвращать undefined — это
+  // приравнивается к error. Поэтому "not found" разводим через
+  // NotFoundError (api.ts), а не через `data === undefined`.
+  // Generic errors (network, 500) → ErrorState с retry.
   if (clientQuery.isLoading || clientQuery.isPending) return <LoadingState />;
-  if (clientQuery.isError) return <ErrorState onRetry={() => clientQuery.refetch()} />;
-  if (!clientQuery.data) return <NotFoundState />;
+  if (clientQuery.isError) {
+    if (clientQuery.error instanceof NotFoundError) return <NotFoundState />;
+    return <ErrorState onRetry={() => clientQuery.refetch()} />;
+  }
 
   const client = clientQuery.data;
   const officer = users?.find((u) => u.id === client.assignedOfficerId);

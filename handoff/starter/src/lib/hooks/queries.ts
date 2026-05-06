@@ -11,6 +11,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useRef } from 'react';
 import * as api from '../api';
+import { NotFoundError } from '../api';
 import type { ListClientsParams } from '../../types/api';
 
 export const useClients = (params: ListClientsParams) => {
@@ -38,6 +39,13 @@ export const useClient = (id: string | undefined) =>
     queryKey: ['client', id],
     queryFn: () => api.getClient(id!),
     enabled: !!id,
+    // NotFoundError — терминальная ошибка, ретрай удваивает Loading-задержку
+    // перед NotFoundState без всякой пользы. Generic errors (network, 500)
+    // ретраим по global default (retry: 1).
+    retry: (failureCount, error) => {
+      if (error instanceof NotFoundError) return false;
+      return failureCount < 1;
+    },
   });
 
 export const useClientSanctions = (clientId: string | undefined) =>
